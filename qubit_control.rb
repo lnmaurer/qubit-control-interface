@@ -291,12 +291,12 @@ class Interface
     self.redrawValueFrame
     
     #control frame
-    addTimeMode = proc {@mode = :addTime}
+    addTimeMode = proc {@mode = :addTime; @nameEntry.focus} #move focus to nameEntry box when clicked
     Tk::Tile::Button.new(@controlFrame) {
       text    'Add Time'
       command addTimeMode
     }.grid(:column=>0, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
-    renameMode = proc {@mode = :rename}
+    renameMode = proc {@mode = :rename; @nameEntry.focus} #move focus to nameEntry box when clicked
     Tk::Tile::Button.new(@controlFrame) {
       text    'Rename'
       command renameMode
