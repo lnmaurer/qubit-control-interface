@@ -1,4 +1,5 @@
 require 'tk'
+require 'tkextlib/tile'
 
 #todo, make deletable, make lockable so can't be deleted
 class ViewTime
@@ -44,7 +45,7 @@ class ViewTime
     @tkLabel = TkLabel.new(parent){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
-    @tkEntry = TkEntry.new(parent){
+    @tkEntry = Tk::Tile::Entry.new(parent){
       validate		'focusout' #TODO: WHY DOES THIS ONLY WORK ONCE????
       validatecommand	tempProc
       state		tempDependent ? 'readonly' : 'normal'
@@ -104,7 +105,7 @@ class ViewValue
     @tkLabel = TkLabel.new(parent){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
-    @tkEntry = TkEntry.new(parent){
+    @tkEntry = Tk::Tile::Entry.new(parent){
       validate		'focusout' #TODO: WHY DOES THIS ONLY WORK ONCE????
       validatecommand	tempProc
       state		tempDependent ? 'readonly' : 'normal'
@@ -202,7 +203,7 @@ class Interface
   def initialize
     @root = TkRoot.new(){title 'Qubit Control'}#.protocol('WM_DELETE_WINDOW', quit)
     
-    @controlFrame = TkLabelFrame.new(@root,:text=>'Controls').grid(:column=>0,:row=>1,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
+    @controlFrame = Tk::Tile::LabelFrame.new(@root,:text=>'Controls').grid(:column=>0,:row=>1,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
     
     @mode = :select #mode determines what clikcing on the canvas will do. Options are :select, :addTime, :rename
     
@@ -217,7 +218,7 @@ class Interface
     @durations = [ViewDuration.new('Initial',@start,@end,initialValue,nil)]
 
     #view frame
-    @viewFrame = TkLabelFrame.new(@root,:text=>'SRAM View').grid(:column=>0,:row=>0,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
+    @viewFrame = Tk::Tile::LabelFrame.new(@root,:text=>'SRAM View').grid(:column=>0,:row=>0,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
     
     #make the canvas
     @view = TkCanvas.new(@viewFrame){ #TODO: make array so that we can have more than one view
@@ -248,24 +249,24 @@ class Interface
     self.redrawAxisLabels
     
     #value frame
-    @valueFrame = TkLabelFrame.new(@root,:text=>'Values').grid(:column=>2,:row=>0,:sticky=>'nsew',:rowspan=>2,:padx=>5,:pady=>5)
+    @valueFrame = Tk::Tile::LabelFrame.new(@root,:text=>'Values').grid(:column=>2,:row=>0,:sticky=>'nsew',:rowspan=>2,:padx=>5,:pady=>5)
     self.redrawValueFrame
     
     #control frame
     addTimeMode = proc {@mode = :addTime}
-    TkButton.new(@controlFrame) {
+    Tk::Tile::Button.new(@controlFrame) {
       text    'Add Time'
       command addTimeMode
     }.grid(:column=>0, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
     renameMode = proc {@mode = :rename}
-    TkButton.new(@controlFrame) {
+    Tk::Tile::Button.new(@controlFrame) {
       text    'Rename'
       command renameMode
     }.grid(:column=>1, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
     TkLabel.new(@controlFrame){
       text    "Name:"
     }.grid(:column=>2, :row=>0,:sticky=>'e', :padx=>5, :pady=>5)
-    @nameEntry = TkEntry.new(@controlFrame){
+    @nameEntry = Tk::Tile::Entry.new(@controlFrame){
       textvariable    @addName
     }.grid(:column=>3, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
   end
