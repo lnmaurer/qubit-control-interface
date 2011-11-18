@@ -243,20 +243,23 @@ class Interface
     @times.each{|t| t.destroyTk}
     @values.each{|v| v.destroyTk}
     @durations.each{|d| d.destroyTk}
+    @lables.each{|l| l.destroy} if @lables != nil
     
-    TkLabel.new(@valueFrame){
+    @lables = [] #array to store the lables so that we can destroy them when redrawing the frame
+    
+    @lables << TkLabel.new(@valueFrame){
       text    "Times:"
     }.grid(:column=>0, :row=>0, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row = 1
     @times.each {|el| el.disp(@valueFrame,row); row += 1}
     
-    TkLabel.new(@valueFrame){
+    @lables << TkLabel.new(@valueFrame){
       text    "Values:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row +=1
     @values.each {|el| el.disp(@valueFrame,row); row += 1}
     
-    TkLabel.new(@valueFrame){
+    @lables << TkLabel.new(@valueFrame){
       text    "Durations:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row +=1
