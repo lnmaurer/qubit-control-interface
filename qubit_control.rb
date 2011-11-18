@@ -4,26 +4,41 @@ require 'tkextlib/tile'
 #todo, make deletable, make lockable so can't be deleted
 class ViewTime
   attr_reader :value, :name, :dependent, :parent, :row
-  def initialize(name,value,dependent,redrawCanvasProc,redrawAxisProc,parent=nil,row=nil)
+  def initialize(name,value,dependent,interface,parent=nil,row=nil)
     @name = name
     @value = value
     @tkVariable = TkVariable.new
     @tkVariable.value = @value
-    @redrawCanvasProc = redrawCanvasProc
-    @redrawAxisProc = redrawAxisProc
+    @interface = interface
     @dependent = dependent
     @parent = parent
     @row = row
   end
   def value=(newValue)
-    @value = newValue
-    @tkVariable.value = @value
-    @redrawAxisProc.call
-    @redrawCanvasProc.call
+    if @value != newValue
+      sortedTimes = @interface.times.collect{|t| t.value}.sort
+      currentTime = @value
+      maxTime = sortedTimes.find{|t| t > currentTime} #finds the smallest time larger than currentTime
+      minTime = sortedTimes.reverse.find{|t| t < currentTime} #finds the largest time smaller than currentTime
+      if (newValue > minTime) and (newValue < maxTime) #only change the time if it's in (minTime,maxTime)      
+	@value = newValue
+	@interface.redrawCanvas
+	@interface.redrawAxisLabels
+      end
+      #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
+      #TODO: WHY DOES THIS CRASH SOMETIMES?
+#       @tkVariable.value = @value
+      #TODO: WHY DOES THIS WORK
+      @tkVariable = TkVariable.new
+      @tkVariable.value = @value
+      @tkEntry.textvariable = @tkVariable
+    end
   end
   def name=(newName)
-    @name = newName
-    self.redraw
+    if @name != newName
+      @name = newName
+      self.redraw
+    end
   end
   def dependent=(newDep)
     @dependent = newDep
@@ -35,14 +50,14 @@ class ViewTime
     tempProc = proc do
       if @tkEntry.get != ''
 	self.value = @tkEntry.get.to_f 
-	@redrawCanvasProc.call
+	@interface.redrawCanvas
       end
       1
     end
     tempName = @name
     tempDependent = @dependent
     self.destroyTk
-    @tkLabel = TkLabel.new(parent){
+    @tkLabel = Tk::Tile::Label.new(parent){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
     @tkEntry = Tk::Tile::Entry.new(parent){
@@ -64,26 +79,35 @@ end
 
 class ViewValue
   attr_reader :value, :name, :dependent, :parent, :row
-  def initialize(name, value, dependent, redrawCanvasProc, redrawAxisProc, parent=nil, row=nil)
+  def initialize(name, value, dependent, interface, parent=nil, row=nil)
     @name = name
     @value = value
     @tkVariable = TkVariable.new
     @tkVariable.value = @value
     @dependent = dependent
-    @redrawCanvasProc = redrawCanvasProc
-    @redrawAxisProc = redrawAxisProc
+    @interface = interface
     @parent = parent
     @row = row
   end
   def value=(newValue)
-    @value = newValue
-    @tkVariable.value = @value
-    @redrawAxisProc.call
-    @redrawCanvasProc.call
+    if @value != newValue
+      @value = newValue
+#TODO: why does this crash sometimes?
+#       @tkVariable.value = @value
+#TODO: why does this work?
+      @tkVariable = TkVariable.new
+      @tkVariable.value = @value
+      @tkEntry.textvariable = @tkVariable
+      
+      @interface.redrawCanvas
+      @interface.redrawAxisLabels
+    end
   end
   def name=(newName)
-    @name = newName
-    self.redraw
+    if @name != newName
+      @name = newName
+      self.redraw
+    end
   end
   def dependent=(newDep)
     @dependent = newDep
@@ -97,12 +121,12 @@ class ViewValue
     tempProc = proc do
       if @tkEntry.get != ''
 	self.value = @tkEntry.get.to_f 
-	@redrawCanvasProc.call
+	@interface.redrawCanvas
       end
       1
     end
     self.destroyTk
-    @tkLabel = TkLabel.new(parent){
+    @tkLabel = Tk::Tile::Label.new(parent){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
     @tkEntry = Tk::Tile::Entry.new(parent){
@@ -134,8 +158,10 @@ class ViewDuration
     @row = row
   end
   def name=(newName)
-    @name = newName
-    self.redraw
+    if @name != newName
+      @name = newName
+      self.redraw
+    end
   end
   def dependent=(newDep)
     @dependent = newDep
@@ -161,7 +187,7 @@ class ViewDuration
     endName = @endViewTime.name
     valueName = @assocViewValue.name
     self.destroyTk
-    @tkLabel = TkLabel.new(parent){
+    @tkLabel = Tk::Tile::Label.new(parent){
       text    "#{tempName}: #{startName} #{endName} #{valueName}"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
   end
@@ -200,6 +226,7 @@ end
 class Interface
   @@ViewWidth = 600
   @@ViewHeight = 200
+  attr_reader :times
   def initialize
     @root = TkRoot.new(){title 'Qubit Control'}#.protocol('WM_DELETE_WINDOW', quit)
     
@@ -207,12 +234,13 @@ class Interface
     
     @mode = :select #mode determines what clikcing on the canvas will do. Options are :select, :addTime, :rename
     
-    @redrawCanvasProc = proc{self.redrawCanvas} #will pass this proc around so that other objects can force a canvas redraw
-    @redrawAxisProc = proc {self.redrawAxisLabels if @startValue != @start.value.to_s or @endValue != @end.value.to_s or @maxY != maxValue.to_s}
+    @startValue = 0
+    @stopValue = 0
+    @maxY = 0
     
-    @start = ViewTime.new('Start',0,true,@redrawCanvasProc,@redrawAxisProc)
-    @end = ViewTime.new('Stop',1000,true,@redrawCanvasProc,@redrawAxisProc)
-    initialValue = ViewValue.new('Initial',1,false,@redrawCanvasProc,@redrawAxisProc)
+    @start = ViewTime.new('Start',0,true,self)
+    @end = ViewTime.new('Stop',1000,true,self)
+    initialValue = ViewValue.new('Initial',1,false,self)
     @times = [@start, @end]
     @values = [initialValue]
     @durations = [ViewDuration.new('Initial',@start,@end,initialValue,nil)]
@@ -230,13 +258,13 @@ class Interface
     viewClick = proc do |canvasx, canvasy|
       if @mode == :addTime and (not @times.collect{|t| t.name}.include?(@nameEntry.get))
 	time = xToTime(canvasx)
-	newTime = ViewTime.new(@nameEntry.get,time,false,@redrawCanvasProc,@redrawAxisProc)
+	newTime = ViewTime.new(@nameEntry.get,time,false,self)
 	@times << newTime
 	toSplit = @durations.find{|dur| (dur.start < time) and (dur.stop > time)} #find the duration that's getting chopped by this
 	@durations.reject!{|dur| (dur.start < time) and (dur.stop > time)} #remove the duration that's getting chopped by this
 	@durations.push(toSplit.split(newTime)).flatten! #add the two new durations
 	@mode = :select #put back in select mode after adding one time
-	self.refresh #we've added a new time, so have to redraw values frame from scratch
+	self.refresh #we've added a new time, so have to redraw canvas and values frame from scratch
       end
     end
     @view.bind('1',  viewClick, "%x %y")
@@ -263,7 +291,7 @@ class Interface
       text    'Rename'
       command renameMode
     }.grid(:column=>1, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
-    TkLabel.new(@controlFrame){
+    Tk::Tile::Label.new(@controlFrame){
       text    "Name:"
     }.grid(:column=>2, :row=>0,:sticky=>'e', :padx=>5, :pady=>5)
     @nameEntry = Tk::Tile::Entry.new(@controlFrame){
@@ -280,19 +308,19 @@ class Interface
     
     @lables = [] #array to store the lables so that we can destroy them when redrawing the frame
     
-    @lables << TkLabel.new(@valueFrame){
+    @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Times:"
     }.grid(:column=>0, :row=>0, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row = 1
     @times.each {|el| el.disp(@valueFrame,row); row += 1}
     
-    @lables << TkLabel.new(@valueFrame){
+    @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Values:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row +=1
     @values.each {|el| el.disp(@valueFrame,row); row += 1}
     
-    @lables << TkLabel.new(@valueFrame){
+    @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Durations:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row +=1
@@ -315,17 +343,10 @@ class Interface
 	  if @mode == :rename
 	    time.name = @nameEntry.get unless @times.collect{|t| t.name}.include?(@nameEntry.get)
 	    @mode = :select
-	    self.redrawCanvas
 	  elsif @mode == :select
-	    #don't want to let the user drag the time past any other time, so need to find the limits we can drag it to
-	    sortedTimes = @times.collect{|t| t.value}.sort
-	    currentTime = time.value
-	    maxTime = sortedTimes.find{|t| t > currentTime} #finds the smallest time larger than currentTime
-	    minTime = sortedTimes.reverse.find{|t| t < currentTime} #finds the largest time smaller than currentTime
 	    tempDragProc = proc do |canvasx, canvasy|
 	      value = xToTime(canvasx)
-	      time.value = value if (value > minTime) and (value < maxTime) #only change the time if it's in (minTime,maxTime)
-	      self.redrawCanvas
+	      time.value = value
 	    end
 	    @view.bind('B1-Motion', tempDragProc, "%x %y") 
 	  end
@@ -353,7 +374,6 @@ class Interface
 	  tempDragProc = proc do |canvasx, canvasy|
 	    value = yToValue(canvasy)
 	    val.value = value
-	    self.redrawCanvas
 	  end
 	  @view.bind('B1-Motion', tempDragProc, "%x %y")	  
 	end
@@ -368,7 +388,6 @@ class Interface
 	if @mode == :rename #if we're in rename mode, then rename it
 	  dur.name = @nameEntry.get unless @durations.collect{|t| t.name}.include?(@nameEntry.get)
 	  @mode = :select
-	  self.redrawCanvas
 	elsif @mode == :select #if we're in select mode, then prepare to move the duration
 	  if @durations.find{|d| (d.assocViewValue == dur.assocViewValue) and not (d == dur)} #more than one other duration uses this value
 	    #need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
@@ -376,7 +395,7 @@ class Interface
 	    while @values.collect{|v| v.name}.include?(dur.assocViewValue.name + count.to_s)
 	      count += 1
 	    end
-	    newValue = ViewValue.new(dur.assocViewValue.name + count.to_s, dur.assocViewValue.value, dur.assocViewValue.dependent,@redrawCanvasProc,@redrawAxisProc)
+	    newValue = ViewValue.new(dur.assocViewValue.name + count.to_s, dur.assocViewValue.value, dur.assocViewValue.dependent,self)
 	    @values << newValue
 	    dur.assocViewValue = newValue
 	    self.redrawValueFrame #added a new thing to value frame, so need to redraw it from scratch
@@ -385,7 +404,6 @@ class Interface
 	  tempDragProc = proc do |canvasx, canvasy|
 	    value = yToValue(canvasy)
 	    dur.assocViewValue.value = value
-	    self.redrawCanvas
 	  end
 	  @view.bind('B1-Motion', tempDragProc, "%x %y")
 	end
@@ -396,31 +414,33 @@ class Interface
   end
   
   def redrawAxisLabels
+    return if (@startValue == @start.value.to_s) and (@endValue == @end.value.to_s) and (@maxY == maxValue.to_s) #don't do anything if nothing here needs updating
+    
     @axisLables.each{|l| l.destroy} if @axisLables != nil
     @axisLables = []
     
     #the next three lables are for the x axis
     startValue = @startValue = @start.value.to_s
-    @axisLables << TkLabel.new(@viewFrame){
+    @axisLables << Tk::Tile::Label.new(@viewFrame){
 	text    startValue
     }.grid(:column=>1, :row=>3,:sticky=>'w', :padx=>0, :pady=>5)
-    @axisLables << TkLabel.new(@viewFrame){
+    @axisLables << Tk::Tile::Label.new(@viewFrame){
 	text    'Time (UNITS???)'
     }.grid(:column=>2, :row=>3,:sticky=>'ew', :padx=>0, :pady=>5)
     endValue = @endValue = @end.value.to_s
-    @axisLables << TkLabel.new(@viewFrame){
+    @axisLables << Tk::Tile::Label.new(@viewFrame){
 	text    endValue
     }.grid(:column=>3, :row=>3,:sticky=>'e', :padx=>0, :pady=>5)
     
     #next three lables are for y axis
     maxY = @maxY = maxValue.to_s
-    @axisLables << TkLabel.new(@viewFrame){
+    @axisLables << Tk::Tile::Label.new(@viewFrame){
 	text    maxY
     }.grid(:column=>0, :row=>0,:sticky=>'ne', :padx=>0, :pady=>5)
-    @axisLables << TkLabel.new(@viewFrame){
+    @axisLables << Tk::Tile::Label.new(@viewFrame){
 	text    '??? (UNITS???)'
     }.grid(:column=>0, :row=>1,:sticky=>'nse', :padx=>0, :pady=>5)
-    @axisLables << TkLabel.new(@viewFrame){
+    @axisLables << Tk::Tile::Label.new(@viewFrame){
 	text    '0'
     }.grid(:column=>0, :row=>2,:sticky=>'se', :padx=>0, :pady=>5)
   end
