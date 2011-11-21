@@ -82,6 +82,9 @@ class ViewTime
   def redraw
     self.disp(@row) if @row != nil
   end
+  def dragProc
+    proc {|canvasx, canvasy| self.value = @interface.xToTime(canvasx)}
+  end
 end
 
 class ViewValue
@@ -155,6 +158,9 @@ class ViewValue
   def redraw
     self.disp(@row) if @row != nil
   end
+  def dragProc
+    proc {|canvasx, canvasy| self.value = @interface.yToValue(canvasy)}
+  end
 end
 
 class ViewDuration
@@ -223,6 +229,10 @@ class ViewDuration
   def value
     @assocViewValue.value
   end
+  
+  def dragProc
+    tempDragProc = proc {|canvasx, canvasy| @assocViewValue.value = @interface.yToValue(canvasy)}
+  end
 end
 
 class Array
@@ -269,7 +279,8 @@ class Interface
 	newTime = ViewTime.new(@nameEntry.get,time,false,self)
 	@times << newTime
 	toSplit = @durations.find{|dur| (dur.start < time) and (dur.stop > time)} #find the duration that's getting chopped by this
-	@durations.reject!{|dur| (dur.start < time) and (dur.stop > time)} #remove the duration that's getting chopped by this
+	toSplit.destroyTk #clear it from the value frame
+	@durations.delete(toSplit) #remove the duration that's getting chopped by this
 	@durations.push(toSplit.split(newTime)).flatten! #add the two new durations
 	@mode = :select #put back in select mode after adding one time
 	self.refresh #we've added a new time, so have to redraw canvas and values frame from scratch
@@ -294,10 +305,10 @@ class Interface
       text    'Add Time'
       command addTimeMode
     }.grid(:column=>0, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
-    deleteTomeMode = proc {@mode = :deleteTime}
+    deleteTimeMode = proc {@mode = :deleteTime}
     Tk::Tile::Button.new(@controlFrame) {
       text    	'Delete Time'
-      command	deleteTomeMode
+      command	deleteTimeMode
     }.grid(:column=>1, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
     renameMode = proc {@mode = :rename; @nameEntry.focus} #move focus to nameEntry box when clicked
     Tk::Tile::Button.new(@controlFrame) {
@@ -351,17 +362,13 @@ class Interface
     @view.delete('all')
     
     @times.each do |time|
-      unless time.name == 'Start' or time.name == 'Stop'
+      unless time.name == 'Start' or time.name == 'Stop' #don't display or do anything for start or stop times
 	tempProc = proc do |canvasx, canvasy|
 	  if @mode == :rename
 	    time.name = @nameEntry.get unless @times.collect{|t| t.name}.include?(@nameEntry.get)
 	    @mode = :select
 	  elsif @mode == :select
-	    tempDragProc = proc do |canvasx, canvasy|
-	      value = xToTime(canvasx)
-	      time.value = value
-	    end
-	    @view.bind('B1-Motion', tempDragProc, "%x %y") 
+	    @view.bind('B1-Motion', time.dragProc, "%x %y") #bind the proc to change the value to the canvas 
 	  elsif @mode == :deleteTime
 	    #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
 	    #TODO: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM
@@ -373,6 +380,7 @@ class Interface
 	    unless @durations.find{|d| d.assocViewValue == secondDuration.assocViewValue} != nil #there's another duration using that value, so we don't want to delete the value
 	      @values.delete(secondDuration.assocViewValue)
 	    end
+	    self.refresh
 	    @mode = :select
 	  end
 	end
@@ -396,11 +404,7 @@ class Interface
 	  end
 	  @mode = :select
 	elsif @mode == :select
-	  tempDragProc = proc do |canvasx, canvasy|
-	    value = yToValue(canvasy)
-	    val.value = value
-	  end
-	  @view.bind('B1-Motion', tempDragProc, "%x %y")	  
+	  @view.bind('B1-Motion', val.dragProc, "%x %y") #bind the proc to change the value to the canvas  
 	end
       end
       temp = TkcLine.new(@view, 0, valueToY(val.value), @@ViewWidth, valueToY(val.value), :width =>1, :fill=>'red', :dash=>'.')
@@ -408,7 +412,6 @@ class Interface
     end    
     
     @durations.each do |dur|
-      #the following proc will get called if we click on a duration
       tempProc = proc do |canvasx, canvasy|
 	if @mode == :rename #if we're in rename mode, then rename it
 	  dur.name = @nameEntry.get unless @durations.collect{|t| t.name}.include?(@nameEntry.get)
@@ -426,11 +429,7 @@ class Interface
 	    self.redrawValueFrame #added a new thing to value frame, so need to redraw it from scratch
 	  end
 	  #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
-	  tempDragProc = proc do |canvasx, canvasy|
-	    value = yToValue(canvasy)
-	    dur.assocViewValue.value = value
-	  end
-	  @view.bind('B1-Motion', tempDragProc, "%x %y")
+	  @view.bind('B1-Motion', dur.dragProc, "%x %y") #bind the proc to change the value to the canvas
 	end
       end
       temp = TkcLine.new(@view, timeToX(dur.start), valueToY(dur.value), timeToX(dur.stop), valueToY(dur.value), :width =>2, :fill=>'red')
