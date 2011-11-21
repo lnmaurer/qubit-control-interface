@@ -242,14 +242,14 @@ class Interface
     
     @controlFrame = Tk::Tile::LabelFrame.new(@root,:text=>'Controls').grid(:column=>0,:row=>1,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
     
-    @mode = :select #mode determines what clikcing on the canvas will do. Options are :select, :addTime, :rename
+    @mode = :select #mode determines what clikcing on the canvas will do. Options are :select, :addTime, :deleteTime, and :rename
     
     @startValue = 0
     @stopValue = 0
     @maxY = 0
     
-    @start = ViewTime.new('Start',0,true,self)
-    @end = ViewTime.new('Stop',1000,true,self)
+    @start = ViewTime.new('Start',0.0,true,self)
+    @end = ViewTime.new('Stop',1000.0,true,self)
     initialValue = ViewValue.new('Initial',1,false,self)
     @times = [@start, @end]
     @values = [initialValue]
@@ -296,17 +296,22 @@ class Interface
       text    'Add Time'
       command addTimeMode
     }.grid(:column=>0, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
+    deleteTomeMode = proc {@mode = :deleteTime}
+    Tk::Tile::Button.new(@controlFrame) {
+      text    	'Delete Time'
+      command	deleteTomeMode
+    }.grid(:column=>1, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
     renameMode = proc {@mode = :rename; @nameEntry.focus} #move focus to nameEntry box when clicked
     Tk::Tile::Button.new(@controlFrame) {
       text    'Rename'
       command renameMode
-    }.grid(:column=>1, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
+    }.grid(:column=>2, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
     Tk::Tile::Label.new(@controlFrame){
       text    "Name:"
-    }.grid(:column=>2, :row=>0,:sticky=>'e', :padx=>5, :pady=>5)
+    }.grid(:column=>3, :row=>0,:sticky=>'e', :padx=>5, :pady=>5)
     @nameEntry = Tk::Tile::Entry.new(@controlFrame){
       textvariable    @addName
-    }.grid(:column=>3, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
+    }.grid(:column=>4, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
   end
   
   def redrawValueFrame
@@ -359,6 +364,19 @@ class Interface
 	      time.value = value
 	    end
 	    @view.bind('B1-Motion', tempDragProc, "%x %y") 
+	  elsif @mode == :deleteTime
+	    #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
+	    #TODO: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM
+	    firstDuration = @durations.find{|d| d.endViewTime == time}
+	    secondDuration = @durations.find{|d| d.startViewTime == time}
+	    firstDuration.endViewTime = secondDuration.endViewTime
+	    @durations.delete(secondDuration) #get rid of second duration
+	    @times.delete(time) #get rid of the deleted time
+	    unless @durations.find{|d| d.assocViewValue == secondDuration.assocViewValue} != nil #there's another duration using that value, so we don't want to delete the value
+	      @values.delete(secondDuration.assocViewValue)
+	    end
+self.redrawCanvas #TODO: integrate in to class
+	    @mode = :select
 	  end
 	end
 	temp = TkcLine.new(@view, timeToX(time.value), 0, timeToX(time.value), @@ViewHeight, :width =>2, :dash=>'.')
