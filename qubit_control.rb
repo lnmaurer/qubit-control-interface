@@ -3,15 +3,14 @@ require 'tkextlib/tile'
 
 #todo, make deletable, make lockable so can't be deleted
 class ViewTime
-  attr_reader :value, :name, :locked, :parent, :row
-  def initialize(name,value,locked,interface,parent=nil,row=nil)
+  attr_reader :value, :name, :locked, :interface, :row
+  def initialize(name,value,locked,interface,row=nil)
     @name = name
     @value = value
     @tkVariable = TkVariable.new
     @tkVariable.value = @value
     @interface = interface
     @locked = locked
-    @parent = parent
     @row = row
   end
   def value=(newValue)
@@ -42,8 +41,7 @@ class ViewTime
       self.redraw
     end
   end
-  def disp(parent, row)
-    @parent = parent
+  def disp(row)
     @row = row
     entryProc = proc do
       if @tkEntry.get != ''
@@ -55,10 +53,10 @@ class ViewTime
     tempName = @name
     tempDependent = @locked
     self.destroyTk
-    @tkLabel = Tk::Tile::Label.new(parent){
+    @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
-    @tkEntry = Tk::Tile::Entry.new(parent){
+    @tkEntry = Tk::Tile::Entry.new(@interface.valueFrame){
 #       validate		'focusout' #TODO: WHY DOES THIS ONLY WORK ONCE????
 #       validatecommand	entryProc
     }.grid(:column=>1, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
@@ -71,7 +69,7 @@ class ViewTime
       @locked = (@tkCheck.get_value == '1')
       @tkEntry.state = (@locked ? 'readonly' : 'normal')
     end
-    @tkCheck = Tk::Tile::CheckButton.new(parent) {
+    @tkCheck = Tk::Tile::CheckButton.new(@interface.valueFrame) {
       text 'Locked?'
       command checkProc
     }.grid(:column=>2, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
@@ -82,20 +80,19 @@ class ViewTime
     @tkEntry.destroy if @tkLabel != nil
   end
   def redraw
-    self.disp(@parent,@row) if @parent != nil and @row != nil
+    self.disp(@row) if @row != nil
   end
 end
 
 class ViewValue
-  attr_reader :value, :name, :locked, :parent, :row
-  def initialize(name, value, locked, interface, parent=nil, row=nil)
+  attr_reader :value, :name, :locked, :interface, :row
+  def initialize(name, value, locked, interface, row=nil)
     @name = name
     @value = value
     @tkVariable = TkVariable.new
     @tkVariable.value = @value
     @locked = locked
     @interface = interface
-    @parent = parent
     @row = row
   end
   def value=(newValue)
@@ -118,8 +115,7 @@ class ViewValue
       self.redraw
     end
   end
-  def disp(parent, row)
-    @parent = parent
+  def disp(row)
     @row = row
     tempName = @name
     tempDependent = @locked
@@ -131,10 +127,10 @@ class ViewValue
       1
     end
     self.destroyTk
-    @tkLabel = Tk::Tile::Label.new(parent){
+    @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
-    @tkEntry = Tk::Tile::Entry.new(parent){
+    @tkEntry = Tk::Tile::Entry.new(@interface.valueFrame){
 #       validate		'focusout' #TODO: WHY DOES THIS ONLY WORK ONCE????
 #       validatecommand	entryProc
     }.grid(:column=>1, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
@@ -146,7 +142,7 @@ class ViewValue
       @locked = (@tkCheck.get_value == '1')
       @tkEntry.state = (@locked ? 'readonly' : 'normal')
     end
-    @tkCheck = Tk::Tile::CheckButton.new(parent) {
+    @tkCheck = Tk::Tile::CheckButton.new(@interface.valueFrame) {
       text 'Locked?'
       command checkProc
     }.grid(:column=>2, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
@@ -157,18 +153,18 @@ class ViewValue
     @tkEntry.destroy if @tkLabel != nil
   end
   def redraw
-    self.disp(@parent,@row) if @parent != nil and @row != nil
+    self.disp(@row) if @row != nil
   end
 end
 
 class ViewDuration
-  attr_accessor :name,:startViewTime, :endViewTime, :assocViewValue, :parent, :row
-  def initialize(name,startViewTime,endViewTime,assocViewValue,parent=nil,row=nil)
+  attr_accessor :name,:startViewTime, :endViewTime, :assocViewValue, :interface, :row
+  def initialize(name,startViewTime,endViewTime,assocViewValue,interface,row=nil)
     @name = name
     @startViewTime = startViewTime
     @endViewTime = endViewTime
     @assocViewValue = assocViewValue
-    @parent = parent
+    @interface = interface
     @row = row
   end
   def name=(newName)
@@ -179,25 +175,27 @@ class ViewDuration
   end
   def startViewTime=(s)
     @startViewTime = s
+    @interface.redrawCanvas
     self.redraw
   end
   def endViewTime=(e)
     @endViewTime = e
+    @interface.redrawCanvas
     self.redraw
   end
   def assocViewValue=(a)
     @assocViewValue = a
+    @interface.redrawCanvas
     self.redraw
   end  
-  def disp(parent, row)
-    @parent = parent
+  def disp(row)
     @row = row
     tempName = @name
     startName = @startViewTime.name
     endName = @endViewTime.name
     valueName = @assocViewValue.name
     self.destroyTk
-    @tkLabel = Tk::Tile::Label.new(parent){
+    @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}: #{startName} #{endName} #{valueName}"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
   end
@@ -207,11 +205,11 @@ class ViewDuration
   end
   
   def redraw
-    self.disp(@parent,@row) if @parent != nil and @row != nil
+    self.disp(@row) if @row != nil
   end
   
   def split(middleViewTime) #split a duration in to two durations
-    [ViewDuration.new(@name + ' part A',@startViewTime,middleViewTime,@assocViewValue,@parent,@row), ViewDuration.new(@name + ' part B',middleViewTime,@endViewTime,@assocViewValue,@parent,@row)]
+    [ViewDuration.new(@name + ' part A',@startViewTime,middleViewTime,@assocViewValue,@interface,@row), ViewDuration.new(@name + ' part B',middleViewTime,@endViewTime,@assocViewValue,@interface,@row)]
   end
     
   def start
@@ -236,7 +234,7 @@ end
 class Interface
   @@ViewWidth = 600
   @@ViewHeight = 200
-  attr_reader :times
+  attr_reader :times, :valueFrame
   def initialize
     @root = TkRoot.new(){title 'Qubit Control'}#.protocol('WM_DELETE_WINDOW', quit)
     
@@ -253,7 +251,7 @@ class Interface
     initialValue = ViewValue.new('Initial',1,false,self)
     @times = [@start, @end]
     @values = [initialValue]
-    @durations = [ViewDuration.new('Initial',@start,@end,initialValue,nil)]
+    @durations = [ViewDuration.new('Initial',@start,@end,initialValue,self)]
 
     #view frame
     @viewFrame = Tk::Tile::LabelFrame.new(@root,:text=>'SRAM View').grid(:column=>0,:row=>0,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
@@ -327,19 +325,19 @@ class Interface
       text    "Times:"
     }.grid(:column=>0, :row=>0, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row = 1
-    @times.each {|el| el.disp(@valueFrame,row); row += 1}
+    @times.each {|el| el.disp(row); row += 1}
     
     @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Values:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row +=1
-    @values.each {|el| el.disp(@valueFrame,row); row += 1}
+    @values.each {|el| el.disp(row); row += 1}
     
     @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Durations:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
     row +=1
-    @durations.each {|el| el.disp(@valueFrame,row); row += 1}
+    @durations.each {|el| el.disp(row); row += 1}
   end
   
   def refresh
@@ -375,7 +373,6 @@ class Interface
 	    unless @durations.find{|d| d.assocViewValue == secondDuration.assocViewValue} != nil #there's another duration using that value, so we don't want to delete the value
 	      @values.delete(secondDuration.assocViewValue)
 	    end
-self.redrawCanvas #TODO: integrate in to class
 	    @mode = :select
 	  end
 	end
