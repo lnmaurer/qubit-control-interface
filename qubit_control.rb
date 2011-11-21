@@ -203,7 +203,7 @@ class ViewDuration
     self.destroyTk
     @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}: #{startName} #{endName} #{valueName}"
-    }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
+    }.grid(:column=>0, :row=>row,:sticky=>'w', :columnspan=>3, :padx=>5, :pady=>5)
   end
   
   def destroyTk
@@ -334,19 +334,19 @@ class Interface
     
     @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Times:"
-    }.grid(:column=>0, :row=>0, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
+    }.grid(:column=>0, :row=>0, :columnspan=>2, :padx=>5, :pady=>5)
     row = 1
     @times.each {|el| el.disp(row); row += 1}
     
     @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Values:"
-    }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
+    }.grid(:column=>0, :row=>row, :columnspan=>2, :padx=>5, :pady=>5)
     row +=1
     @values.each {|el| el.disp(row); row += 1}
     
     @lables << Tk::Tile::Label.new(@valueFrame){
       text    "Durations:"
-    }.grid(:column=>0, :row=>row, :columnspan=>2, :sticky=>'ew', :padx=>5, :pady=>5)
+    }.grid(:column=>0, :row=>row, :columnspan=>2, :padx=>5, :pady=>5)
     row +=1
     @durations.each {|el| el.disp(row); row += 1}
   end
@@ -371,16 +371,18 @@ class Interface
 	    @view.bind('B1-Motion', time.dragProc, "%x %y") #bind the proc to change the value to the canvas 
 	  elsif @mode == :deleteTime
 	    #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
-	    #TODO: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM
+	    #TODO: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
 	    firstDuration = @durations.find{|d| d.endViewTime == time}
 	    secondDuration = @durations.find{|d| d.startViewTime == time}
 	    firstDuration.endViewTime = secondDuration.endViewTime
 	    @durations.delete(secondDuration) #get rid of second duration
 	    @times.delete(time) #get rid of the deleted time
+	    time.destroyTk
 	    unless @durations.find{|d| d.assocViewValue == secondDuration.assocViewValue} != nil #there's another duration using that value, so we don't want to delete the value
 	      @values.delete(secondDuration.assocViewValue)
+	      secondDuration.assocViewValue.destroyTk
 	    end
-	    self.refresh
+	    self.refresh #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
 	    @mode = :select
 	  end
 	end
