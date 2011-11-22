@@ -52,10 +52,16 @@ class ViewTime
     end
     tempName = @name
     tempDependent = @locked
-    self.destroyTk
+    @tkLabel.destroy if @tkLabel != nil
+    @tkEntry.destroy if @tkEntry != nil
+    
+    #the label
     @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
+    @interface.valueFrameParts << @tkLabel
+    
+    #the entry box
     @tkEntry = Tk::Tile::Entry.new(@interface.valueFrame){
 #       validate		'focusout' #TODO: WHY DOES THIS ONLY WORK ONCE????
 #       validatecommand	entryProc
@@ -63,6 +69,7 @@ class ViewTime
     @tkEntry.state = (@locked ? 'readonly' : 'normal')
     @tkEntry.textvariable = @tkVariable
     @tkEntry.bind('Return',entryProc)
+    @interface.valueFrameParts << @tkEntry
     
     #the checkbox handles locking the value
     checkProc = proc do
@@ -73,11 +80,8 @@ class ViewTime
       text 'Locked?'
       command checkProc
     }.grid(:column=>2, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
-    @tkCheck.set_value(@locked ? '1': '0')
-  end
-  def destroyTk
-    @tkLabel.destroy if @tkLabel != nil
-    @tkEntry.destroy if @tkLabel != nil
+    @tkCheck.set_value(@locked ? '1': '0')    
+    @interface.valueFrameParts << @tkCheck
   end
   def redraw
     self.disp(@row) if @row != nil
@@ -129,10 +133,16 @@ class ViewValue
       end
       1
     end
-    self.destroyTk
+    @tkLabel.destroy if @tkLabel != nil
+    @tkEntry.destroy if @tkEntry != nil
+    
+    #the label
     @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}:"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
+    @interface.valueFrameParts << @tkLabel
+    
+    #the entry box
     @tkEntry = Tk::Tile::Entry.new(@interface.valueFrame){
 #       validate		'focusout' #TODO: WHY DOES THIS ONLY WORK ONCE????
 #       validatecommand	entryProc
@@ -140,7 +150,9 @@ class ViewValue
     @tkEntry.state = (@locked ? 'readonly' : 'normal')
     @tkEntry.textvariable = @tkVariable
     @tkEntry.bind('Return',entryProc)
+    @interface.valueFrameParts << @tkEntry
     
+    #the checkbox
     checkProc = proc do
       @locked = (@tkCheck.get_value == '1')
       @tkEntry.state = (@locked ? 'readonly' : 'normal')
@@ -150,10 +162,7 @@ class ViewValue
       command checkProc
     }.grid(:column=>2, :row=>row,:sticky=>'w', :padx=>5, :pady=>5)
     @tkCheck.set_value(@locked ? '1': '0')
-  end
-  def destroyTk
-    @tkLabel.destroy if @tkLabel != nil
-    @tkEntry.destroy if @tkLabel != nil
+    @interface.valueFrameParts << @tkCheck
   end
   def redraw
     self.disp(@row) if @row != nil
@@ -200,14 +209,11 @@ class ViewDuration
     startName = @startViewTime.name
     endName = @endViewTime.name
     valueName = @assocViewValue.name
-    self.destroyTk
+    @tkLabel.destroy if @tkLabel != nil
     @tkLabel = Tk::Tile::Label.new(@interface.valueFrame){
       text    "#{tempName}: #{startName} #{endName} #{valueName}"
     }.grid(:column=>0, :row=>row,:sticky=>'w', :columnspan=>3, :padx=>5, :pady=>5)
-  end
-  
-  def destroyTk
-    @tkLabel.destroy if @tkLabel != nil
+    @interface.valueFrameParts << @tkLabel
   end
   
   def redraw
@@ -244,7 +250,7 @@ end
 class Interface
   @@ViewWidth = 600
   @@ViewHeight = 200
-  attr_reader :times, :valueFrame
+  attr_reader :times, :valueFrame, :valueFrameParts
   def initialize
     @root = TkRoot.new(){title 'Qubit Control'}#.protocol('WM_DELETE_WINDOW', quit)
     
@@ -279,7 +285,6 @@ class Interface
 	newTime = ViewTime.new(@nameEntry.get,time,false,self)
 	@times << newTime
 	toSplit = @durations.find{|dur| (dur.start < time) and (dur.stop > time)} #find the duration that's getting chopped by this
-	toSplit.destroyTk #clear it from the value frame
 	@durations.delete(toSplit) #remove the duration that's getting chopped by this
 	@durations.push(toSplit.split(newTime)).flatten! #add the two new durations
 	@mode = :select #put back in select mode after adding one time
@@ -297,6 +302,7 @@ class Interface
     
     #value frame
     @valueFrame = Tk::Tile::LabelFrame.new(@root,:text=>'Values').grid(:column=>2,:row=>0,:sticky=>'nsew',:rowspan=>2,:padx=>5,:pady=>5)
+    @valueFrameParts = [] #will contain all the widgets in the value frame so that we can destroy them even after the object they belong to gets destroyed
     self.redrawValueFrame
     
     #control frame
@@ -325,26 +331,23 @@ class Interface
   
   def redrawValueFrame
     #first, clear out all the old stuff from the frame
-    @times.each{|t| t.destroyTk}
-    @values.each{|v| v.destroyTk}
-    @durations.each{|d| d.destroyTk}
-    @lables.each{|l| l.destroy} if @lables != nil
+    @valueFrameParts.each{|l| l.destroy}
     
-    @lables = [] #array to store the lables so that we can destroy them when redrawing the frame
+    @valueFrameParts = [] #array to store the parts so that we can destroy them when redrawing the frame
     
-    @lables << Tk::Tile::Label.new(@valueFrame){
+    @valueFrameParts << Tk::Tile::Label.new(@valueFrame){
       text    "Times:"
     }.grid(:column=>0, :row=>0, :columnspan=>2, :padx=>5, :pady=>5)
     row = 1
     @times.each {|el| el.disp(row); row += 1}
     
-    @lables << Tk::Tile::Label.new(@valueFrame){
+    @valueFrameParts << Tk::Tile::Label.new(@valueFrame){
       text    "Values:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :padx=>5, :pady=>5)
     row +=1
     @values.each {|el| el.disp(row); row += 1}
     
-    @lables << Tk::Tile::Label.new(@valueFrame){
+    @valueFrameParts << Tk::Tile::Label.new(@valueFrame){
       text    "Durations:"
     }.grid(:column=>0, :row=>row, :columnspan=>2, :padx=>5, :pady=>5)
     row +=1
@@ -377,10 +380,8 @@ class Interface
 	    firstDuration.endViewTime = secondDuration.endViewTime
 	    @durations.delete(secondDuration) #get rid of second duration
 	    @times.delete(time) #get rid of the deleted time
-	    time.destroyTk
 	    unless @durations.find{|d| d.assocViewValue == secondDuration.assocViewValue} != nil #there's another duration using that value, so we don't want to delete the value
 	      @values.delete(secondDuration.assocViewValue)
-	      secondDuration.assocViewValue.destroyTk
 	    end
 	    self.refresh #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
 	    @mode = :select
