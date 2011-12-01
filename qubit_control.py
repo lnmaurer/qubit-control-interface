@@ -137,6 +137,8 @@ class Interface:
     self.nameEntry.grid(column=4, row=0,sticky='w', padx=5, pady=5)
 
 #The view frame and canvas
+    self.axisLables = []
+
     self.viewFrame = ttk.Labelframe(self.root,text='SRAM View')
     self.viewFrame.grid(column=0,row=0,columnspan=2,sticky='nsew',padx=5,pady=5)
 
@@ -151,14 +153,14 @@ class Interface:
     #we do this by binding to any motion on the canvas
     self.view.bind("<Motion>", lambda e: self.view.bind("<B1-Motion>", lambda e: None))
     
-    self.redrawCanvas
-    self.redrawAxisLabels    
+    self.redrawCanvas()
+    self.redrawAxisLabels()   
     
 #The value frame
     self.valueFrame = ttk.Labelframe(self.root,text='Values')
     self.valueFrame.grid(column=2, row=0, sticky='nsew', rowspan=2, padx=5, pady=5)
     self.valueFrameParts = [] #will contain all the widgets in the value frame so that we can destroy them even after the object they belong to gets destroyed
-    self.redrawValueFrame
+    self.redrawValueFrame()
   
   def redrawValueFrame(self):
     pass
@@ -170,25 +172,61 @@ class Interface:
     pass
   
   def redrawAxisLabels(self):
-    pass
-  
+    #return if (@startValue == @start.value.to_s) and (@endValue == @end.value.to_s) and (@maxY == maxValue.to_s) #don't do anything if nothing here needs updating
+    
+    for l in self.axisLables:
+      l.destroy
+      
+    self.axisLables = []
+    
+    #the next three lables are for the x axis
+    self.startValue = self.start.value
+    tmp = ttk.Label(self.viewFrame, text=str(self.startValue))
+    tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
+    self.axisLables.append(tmp)
+    
+    tmp = ttk.Label(self.viewFrame, text='Time (UNITS???)')
+    tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
+    self.axisLables.append(tmp)
+    
+    self.endValue = self.end.value
+    tmp = ttk.Label(self.viewFrame, text=str(self.endValue))
+    tmp.grid(column=3, row=3, sticky='e', padx=0, pady=5)
+    self.axisLables.append(tmp)
+    
+    #next three lables are for y axis
+    self.maxY = self.maxValue()
+    tmp = ttk.Label(self.viewFrame, text=str(self.maxY))
+    tmp.grid(column=0, row=0, sticky='ne', padx=0, pady=5)
+    self.axisLables.append(tmp)
+    
+    tmp = ttk.Label(self.viewFrame, text='??? (UNITS???)')
+    tmp.grid(column=0, row=1,sticky='nse', padx=0, pady=5)
+    self.axisLables.append(tmp)
+    
+    tmp = ttk.Label(self.viewFrame, text = '0')
+    tmp.grid(column=0, row=2,sticky='se', padx=0, pady=5)
+    self.axisLables.append(tmp)
+    
   def maxValue(self):
-    pass
+    rawvalues =  [x.value for x in self.values]
+    rawvalues.sort
+    return 1.25*rawvalues[-1] #return 1.25 times the largest value
   
   def maxTime(self):
-    pass
+    return self.end.value
   
   def timeToX(self, time):
-    pass
+    return float(self.viewWidth)/self.maxTime * time
   
   def valueToY(self, value):
-    pass
+    return -float(self.ViewHeight)/self.maxValue * value + self.viewHeight
   
   def xToTime(self, x):
-    pass
+    return float(self.maxTime)/self.viewWidth * x
   
   def yToValue(self, y):
-    pass
+    return -self.maxValue/self.viewHeight * y + self.maxValue
   
   
 if __name__ == "__main__":
