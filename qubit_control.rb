@@ -253,9 +253,7 @@ class Interface
   attr_reader :times, :valueFrame, :valueFrameParts
   def initialize
     @root = TkRoot.new(){title 'Qubit Control'}#.protocol('WM_DELETE_WINDOW', quit)
-    
-    @controlFrame = Tk::Tile::LabelFrame.new(@root,:text=>'Controls').grid(:column=>0,:row=>1,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
-    
+       
     @mode = :select #mode determines what clikcing on the canvas will do. Options are :select, :addTime, :deleteTime, and :rename
     
     @startValue = 0
@@ -306,6 +304,8 @@ class Interface
     self.redrawValueFrame
     
     #control frame
+    @controlFrame = Tk::Tile::LabelFrame.new(@root,:text=>'Controls').grid(:column=>0,:row=>1,:columnspan=>2,:sticky=>'nsew',:padx=>5,:pady=>5)
+
     addTimeMode = proc {@mode = :addTime; @nameEntry.focus} #move focus to nameEntry box when clicked
     Tk::Tile::Button.new(@controlFrame) {
       text    'Add Time'
@@ -324,9 +324,7 @@ class Interface
     Tk::Tile::Label.new(@controlFrame){
       text    "Name:"
     }.grid(:column=>3, :row=>0,:sticky=>'e', :padx=>5, :pady=>5)
-    @nameEntry = Tk::Tile::Entry.new(@controlFrame){
-      textvariable    @addName
-    }.grid(:column=>4, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
+    @nameEntry = Tk::Tile::Entry.new(@controlFrame).grid(:column=>4, :row=>0,:sticky=>'w', :padx=>5, :pady=>5)
   end
   
   def redrawValueFrame
