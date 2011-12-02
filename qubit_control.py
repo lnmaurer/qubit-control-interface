@@ -98,9 +98,10 @@ class Interface:
 #first, set some non-GUI variables
     self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', and 'rename'
     
-    self.startValue = 0
-    self.stopValue = 0
-    self.maxY = 0
+    #initialize these to None so that redrawAxisLabels knows to do its thing
+    self.startValue = None
+    self.endValue = None
+    self.maxY = None
     
     self.start = ViewTime('Start',0.0,True,self)
     self.end = ViewTime('Stop',1000.0,True,self)
@@ -166,47 +167,49 @@ class Interface:
     pass
   
   def refresh(self):
-    pass
+    self.redrawCanvas()
+    self.redrawAxisLabels()
+    self.redrawValueFrame()
   
   def redrawCanvas(self):
     pass
   
   def redrawAxisLabels(self):
-    #return if (@startValue == @start.value.to_s) and (@endValue == @end.value.to_s) and (@maxY == maxValue.to_s) #don't do anything if nothing here needs updating
-    
-    for l in self.axisLables:
-      l.destroy
+    #only update if something has changed
+    if (self.startValue != self.start.value) or (self.endValue != self.end.value) or (self.maxY != self.maxValue):
+      for l in self.axisLables:
+	l.destroy
       
-    self.axisLables = []
+      self.axisLables = []
     
-    #the next three lables are for the x axis
-    self.startValue = self.start.value
-    tmp = ttk.Label(self.viewFrame, text=str(self.startValue))
-    tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
-    self.axisLables.append(tmp)
+      #the next three lables are for the x axis
+      self.startValue = self.start.value
+      tmp = ttk.Label(self.viewFrame, text=str(self.startValue))
+      tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
+      self.axisLables.append(tmp)
     
-    tmp = ttk.Label(self.viewFrame, text='Time (UNITS???)')
-    tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
-    self.axisLables.append(tmp)
+      tmp = ttk.Label(self.viewFrame, text='Time (UNITS???)')
+      tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
+      self.axisLables.append(tmp)
     
-    self.endValue = self.end.value
-    tmp = ttk.Label(self.viewFrame, text=str(self.endValue))
-    tmp.grid(column=3, row=3, sticky='e', padx=0, pady=5)
-    self.axisLables.append(tmp)
+      self.endValue = self.end.value
+      tmp = ttk.Label(self.viewFrame, text=str(self.endValue))
+      tmp.grid(column=3, row=3, sticky='e', padx=0, pady=5)
+      self.axisLables.append(tmp)
     
-    #next three lables are for y axis
-    self.maxY = self.maxValue()
-    tmp = ttk.Label(self.viewFrame, text=str(self.maxY))
-    tmp.grid(column=0, row=0, sticky='ne', padx=0, pady=5)
-    self.axisLables.append(tmp)
+      #next three lables are for y axis
+      self.maxY = self.maxValue()
+      tmp = ttk.Label(self.viewFrame, text=str(self.maxY))
+      tmp.grid(column=0, row=0, sticky='ne', padx=0, pady=5)
+      self.axisLables.append(tmp)
     
-    tmp = ttk.Label(self.viewFrame, text='??? (UNITS???)')
-    tmp.grid(column=0, row=1,sticky='nse', padx=0, pady=5)
-    self.axisLables.append(tmp)
+      tmp = ttk.Label(self.viewFrame, text='??? (UNITS???)')
+      tmp.grid(column=0, row=1,sticky='nse', padx=0, pady=5)
+      self.axisLables.append(tmp)
     
-    tmp = ttk.Label(self.viewFrame, text = '0')
-    tmp.grid(column=0, row=2,sticky='se', padx=0, pady=5)
-    self.axisLables.append(tmp)
+      tmp = ttk.Label(self.viewFrame, text = '0')
+      tmp.grid(column=0, row=2,sticky='se', padx=0, pady=5)
+      self.axisLables.append(tmp)
     
   def maxValue(self):
     rawvalues =  [x.value for x in self.values]
