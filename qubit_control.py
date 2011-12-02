@@ -8,6 +8,14 @@ class ViewTime:
     self.locked = locked
     self.interface = interface
     self.row = row
+    
+    self.stringVar = Tkinter.StringVar()
+    self.stringVar.set(str(value))
+    self.intVar = Tkinter.IntVar()
+    self.intVar.set(1 if self.locked else 0)
+    self.tkLabel = None
+    self.tkEntry = None
+    self.tkCheck = None
   
   def setValue(self, value):
     pass
@@ -16,13 +24,48 @@ class ViewTime:
     pass
   
   def disp(self, row):
-    pass
+    self.row = row
+
+    #get rid of old widgets if they exsist
+    if self.tkLabel != None:
+      self.tkLabel.destroy
+    if self.tkEntry != None:
+      self.tkEntry.destroy
+    
+    #the label
+    self.tkLabel = ttk.Label(self.interface.valueFrame, text=self.name)
+    self.tkLabel.grid(column=0, row=row, sticky='w', padx=5, pady=5)
+    self.interface.valueFrameParts.append(self.tkLabel)
+    
+    #the entry box
+    self.tkEntry = ttk.Entry(self.interface.valueFrame, textvariable=self.stringVar) #todo: get validation working for tkEntry
+    self.tkEntry.grid(column=1, row=row, sticky='w', padx=5, pady=5)
+    self.interface.valueFrameParts.append(self.tkEntry)
+    
+    self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
+
+    def entryMethod(eventObj):
+      if self.tkEntry.get() != '':
+	self.setValue(float(self.tkEntry.get()))
+	self.interface.redrawCanvas
+      return 1
+    self.tkEntry.bind("<Return>",entryMethod)
+    
+    #the checkbox handles locking the value
+    def checkMethod():
+      self.locked = (self.intVar.get() == 1)
+      self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
+      
+    self.tkCheck = ttk.Checkbutton(self.interface.valueFrame, text='Locked?', command=checkMethod, variable=self.intVar)
+    self.tkCheck.grid(column=2, row=row,sticky='w', padx=5, pady=5)   
+    self.interface.valueFrameParts.append(self.tkCheck)
   
   def redraw(self):
-    pass
+    if self.row != None:
+      self.disp(self.row)
   
-  def dragMethod(self):
-    pass
+  def dragMethod(self, eventObj):
+    self.setValue(self.interface.xToTime(eventObj.x))
   
 class ViewValue:
   def __init__(self,name, value, locked, interface, row=None):
@@ -95,7 +138,11 @@ class Interface:
   viewHeight = 200
 
   def __init__(self):
-#first, set some non-GUI variables
+#The root. This has to come first, because 'StringVar's and 'IntVar's in the 'View____'s need it to be initialized before they can be called.
+    self.root = Tkinter.Tk()
+    self.root.title('Qubit Control')
+    
+#set some non-GUI variables
     self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', and 'rename'
     
     #initialize these to None so that redrawAxisLabels knows to do its thing
@@ -109,10 +156,6 @@ class Interface:
     self.times = [self.start, self.end]
     self.values = [initialValue]
     self.durations = [ViewDuration('Initial',self.start,self.end,initialValue,self)]
-    
-#The root
-    self.root = Tkinter.Tk()
-    self.root.title('Qubit Control')
     
 #The control frame
     self.controlFrame = ttk.Labelframe(self.root, text='Controls')
@@ -158,13 +201,49 @@ class Interface:
     self.redrawAxisLabels()   
     
 #The value frame
+    self.valueFrameParts = []
+
     self.valueFrame = ttk.Labelframe(self.root,text='Values')
     self.valueFrame.grid(column=2, row=0, sticky='nsew', rowspan=2, padx=5, pady=5)
     self.valueFrameParts = [] #will contain all the widgets in the value frame so that we can destroy them even after the object they belong to gets destroyed
     self.redrawValueFrame()
   
   def redrawValueFrame(self):
-    pass
+    #first, clear out all the old stuff from the frame
+    for l in self.valueFrameParts:
+      l.destroy
+    
+    self.valueFrameParts = [] #array to store the parts so that we can destroy them when redrawing the frame
+    
+    tmp = ttk.Label(self.valueFrame, text="Times")
+    tmp.grid(column=0, row=0, columnspan=2, padx=5, pady=5)
+    self.valueFrameParts.append(tmp)
+    
+    row = 1
+    
+    for el in self.times:
+      el.disp(row)
+      row += 1
+    
+    tmp = ttk.Label(self.valueFrame, text="Values")
+    tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
+    self.valueFrameParts.append(tmp)
+    
+    row +=1
+    
+    for el in self.values:
+      el.disp(row)
+      row += 1
+    
+    tmp = ttk.Label(self.valueFrame, text="Durations")
+    tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
+    self.valueFrameParts.append(tmp)    
+    
+    row +=1
+    
+    for el in self.durations:
+      el.disp(row)
+      row += 1
   
   def refresh(self):
     self.redrawCanvas()
