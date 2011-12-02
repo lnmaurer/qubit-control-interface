@@ -213,7 +213,7 @@ class ViewDuration:
       self.disp(self.row)
   
   def split(self, middleViewTime):
-    [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface)]
+    return [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface)]
   
   def start(self):
     return self.startViewTime.value
@@ -285,7 +285,16 @@ class Interface:
     self.view.grid(column=1, row=0, columnspan=3, rowspan=3, sticky='nsew', padx=5, pady=5)
   
     def canvasClick(eventObj):
-      print eventObj.x, eventObj.y #todo: put the real thing in; this function is just a test
+      if (self.mode == 'addTime') and (not (self.nameEntry.get() in [t.name for t in self.times])):
+	time = self.xToTime(eventObj.x)
+	newTime = ViewTime(self.nameEntry.get(),time,False,self)
+	self.times.append(newTime)
+	toSplit = [d for d in self.durations if (d.start() < time) and (d.end() > time)].pop() #find the duration that's getting chopped by this
+	self.durations.remove(toSplit) #remove the duration that's getting chopped by this
+	self.durations.extend(toSplit.split(newTime)) #add the two new durations
+	self.mode = 'select' #put back in select mode after adding one time
+	self.refresh() #we've added a new time, so have to redraw canvas and values frame from scratch
+
     self.view.bind("<Button-1>",  canvasClick)  
     
     #make it so that, after dragging an element has ceased, the binding is reset so that further dragging won't move the element unless it gets clicked again first
@@ -394,16 +403,16 @@ class Interface:
     return self.end.value
   
   def timeToX(self, time):
-    return float(self.viewWidth)/self.maxTime * time
+    return float(self.viewWidth)/self.maxTime() * time
   
   def valueToY(self, value):
-    return -float(self.ViewHeight)/self.maxValue * value + self.viewHeight
+    return -float(self.ViewHeight)/self.maxValue() * value + self.viewHeight
   
   def xToTime(self, x):
-    return float(self.maxTime)/self.viewWidth * x
+    return float(self.maxTime())/self.viewWidth * x
   
   def yToValue(self, y):
-    return -self.maxValue/self.viewHeight * y + self.maxValue
+    return -self.maxValue()/self.viewHeight * y + self.maxValue()
   
   
 if __name__ == "__main__":
