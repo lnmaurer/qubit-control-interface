@@ -94,7 +94,6 @@ class ViewTime:
     
   def clickMethod(self, eventObj):
     iface = self.interface
-    print iface.mode
     if (iface.mode == 'rename') and (not (iface.nameEntry.get() in [t.name for t in iface.times])):
       self.setName(iface.nameEntry.get())
       iface.mode = 'select'
@@ -186,9 +185,28 @@ class ViewValue:
     if self.row != None:
       self.disp(self.row)
   
-  def dragMethod(self,eventObj):
+  def dragMethod(self, eventObj):
     self.setValue(self.interface.yToValue(eventObj.y))
-  
+    
+  def clickMethod(self, eventObj): 
+    iface = self.interface
+    if iface.mode == 'rename':
+      newName = iface.nameEntry.get() #the new name
+      valuesWithSameName = [v for v in iface.values if v.name == newName] #look for another value with this name
+      if len(valuesWithSameName) != 0:
+	#if the named value does exist, we'll get rid of the current value and replace it everywhere with the named value	    
+	iface.values.remove(self) #get rid of the current value from the list
+	replacementValue = valuesWithSameName.pop()
+	  
+	for dur in [d for d in iface.durations if d.assocViewValue == self]:
+	  dur.assocViewValue = replacementValue
+      else: #no value uses that name
+	self.setName(newName) #if no value with this name already exists, merely change the name of self
+      iface.refresh() #number of values can change, and the duration section of the viewframe needs to be redrawn since this value's name has changed      
+      iface.mode = 'select'
+    elif iface.mode == 'select':
+      iface.view.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas  
+
 class ViewDuration:
   def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, row=None):
     self.name = name
@@ -247,8 +265,28 @@ class ViewDuration:
   def value(self):
     return self.assocViewValue.value
   
-  def dragMethod(self,eventObj):
+  def dragMethod(self, eventObj):
     self.assocViewValue.setValue(self.interface.yToValue(eventObj.y))
+    
+  def clickMethod(self, eventObj):
+    iface = self.interface
+    if (iface.mode == 'rename') and (not (iface.nameEntry.get() in [d.name for d in iface.durations])): #if we're in rename mode, and the new name isn't in use, then rename it
+      self.setName(iface.nameEntry.get())
+      iface.mode = 'select'
+    elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
+      if self.assocViewValue in [d.assocViewValue for d in iface.durations if d != self] != 0:
+	#more than one other duration uses this value
+	#need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
+	count = 1 #count holds the number we'll append to the end of the name
+	while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
+	  count += 1
+	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked,iface)
+	iface.values.append(newValue)
+	self.assocViewValue = newValue
+	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
+	
+      #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
+      iface.view.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
   
 class Interface:
 
@@ -385,7 +423,14 @@ class Interface:
       if (time.name != 'Start') and (time.name != 'Stop'): #don't display or do anything for start or stop times
 	lineID = self.view.create_line(self.timeToX(time.value), 0, self.timeToX(time.value), self.viewHeight, width=2, dash='.')
 	self.view.tag_bind(lineID, "<Button-1>",  time.clickMethod)
-	
+
+    for value in self.values:
+      lineID = self.view.create_line(0, self.valueToY(value.value), self.viewWidth, self.valueToY(value.value), width=1, fill='red', dash='.')
+      self.view.tag_bind(lineID, "<Button-1>",  value.clickMethod)
+       
+    for dur in self.durations:
+      lineID = self.view.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
+      self.view.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
   
   def redrawAxisLabels(self):
     #only update if something has changed
@@ -426,7 +471,7 @@ class Interface:
     
   def maxValue(self):
     rawvalues =  [x.value for x in self.values]
-    rawvalues.sort
+    rawvalues.sort()
     return 1.25*rawvalues[-1] #return 1.25 times the largest value
   
   def maxTime(self):
@@ -436,7 +481,7 @@ class Interface:
     return float(self.viewWidth)/self.maxTime() * time
   
   def valueToY(self, value):
-    return -float(self.ViewHeight)/self.maxValue() * value + self.viewHeight
+    return -float(self.viewHeight)/self.maxValue() * value + self.viewHeight
   
   def xToTime(self, x):
     return float(self.maxTime())/self.viewWidth * x
