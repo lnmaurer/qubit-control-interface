@@ -18,19 +18,45 @@ class ViewTime:
     self.tkCheck = None
   
   def setValue(self, value):
-    pass
+    if (self.value != value) and (not self.locked):
+      sortedTimes =  [t.value for t in self.interface.times]
+      sortedTimes.sort
+      index = sortedTimes.index(self.value)
+      
+      #find the limits for what this time can be set to
+      if index == 0: #self is the smallest time
+	minTime = None
+	maxTime = sortedTimes[index+1]
+      elif index == (len(sortedTimes)-1): #self is the largest time
+	minTime = sortedTimes[index-1]
+	maxTime = None
+      else:
+	minTime = sortedTimes[index-1]
+	maxTime = sortedTimes[index+1]
+
+      if ((maxTime == None) and (value > minTime)) \
+	or ((minTime == None) and (value < maxTime)) \
+	or ((maxTime != None) and (minTime != None) and (value > minTime) and (value < maxTime)):
+	self.value = value
+	self.interface.redrawCanvas()
+	self.interface.redrawAxisLabels()
+
+    #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
+    self.stringVar.set(str(value))
   
   def setName(self, name):
-    pass
+    if self.name != name:
+      self.name = name
+      self.redraw()
   
   def disp(self, row):
     self.row = row
 
     #get rid of old widgets if they exsist
     if self.tkLabel != None:
-      self.tkLabel.destroy
+      self.tkLabel.destroy()
     if self.tkEntry != None:
-      self.tkEntry.destroy
+      self.tkEntry.destroy()
     
     #the label
     self.tkLabel = ttk.Label(self.interface.valueFrame, text=self.name)
@@ -47,7 +73,7 @@ class ViewTime:
     def entryMethod(eventObj):
       if self.tkEntry.get() != '':
 	self.setValue(float(self.tkEntry.get()))
-	self.interface.redrawCanvas
+	self.interface.redrawCanvas()
       return 1
     self.tkEntry.bind("<Return>",entryMethod)
     
@@ -211,7 +237,7 @@ class Interface:
   def redrawValueFrame(self):
     #first, clear out all the old stuff from the frame
     for l in self.valueFrameParts:
-      l.destroy
+      l.destroy()
     
     self.valueFrameParts = [] #array to store the parts so that we can destroy them when redrawing the frame
     
@@ -257,7 +283,7 @@ class Interface:
     #only update if something has changed
     if (self.startValue != self.start.value) or (self.endValue != self.end.value) or (self.maxY != self.maxValue):
       for l in self.axisLables:
-	l.destroy
+	l.destroy()
       
       self.axisLables = []
     
