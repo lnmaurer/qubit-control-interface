@@ -100,63 +100,132 @@ class ViewValue:
     self.locked = locked
     self.interface = interface
     self.row = row
+    
+    self.stringVar = Tkinter.StringVar()
+    self.stringVar.set(str(value))
+    self.intVar = Tkinter.IntVar()
+    self.intVar.set(1 if self.locked else 0)
+    self.tkLabel = None
+    self.tkEntry = None
+    self.tkCheck = None
   
   def setValue(self, value):
-    pass
+    if (self.value != value) and (not self.locked):
+      self.value = value
+      self.stringVar.set(str(value))
+      
+      self.interface.redrawCanvas()
+      self.interface.redrawAxisLabels()
   
   def setName(self, name):
-    pass
+    if self.name != name:
+      self.name = name
+      self.redraw()
   
   def disp(self, row):
-    pass
-  
+    self.row = row
+
+    #get rid of old widgets if they exsist
+    if self.tkLabel != None:
+      self.tkLabel.destroy()
+    if self.tkEntry != None:
+      self.tkEntry.destroy()
+    
+    #the label
+    self.tkLabel = ttk.Label(self.interface.valueFrame, text=self.name)
+    self.tkLabel.grid(column=0, row=row, sticky='w', padx=5, pady=5)
+    self.interface.valueFrameParts.append(self.tkLabel)
+    
+    #the entry box
+    self.tkEntry = ttk.Entry(self.interface.valueFrame, textvariable=self.stringVar) #todo: get validation working for tkEntry
+    self.tkEntry.grid(column=1, row=row,sticky='w', padx=5, pady=5)
+    self.interface.valueFrameParts.append(self.tkEntry)
+
+    self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
+
+    def entryMethod(eventObj):
+      if self.tkEntry.get() != '':
+	self.setValue(float(self.tkEntry.get()))
+	self.interface.redrawCanvas()
+      return 1
+    self.tkEntry.bind("<Return>",entryMethod)
+    
+    #the checkbox handles locking the value
+    def checkMethod():
+      self.locked = (self.intVar.get() == 1)
+      self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
+      
+    self.tkCheck = ttk.Checkbutton(self.interface.valueFrame, text='Locked?', command=checkMethod, variable=self.intVar)
+    self.tkCheck.grid(column=2, row=row,sticky='w', padx=5, pady=5)   
+    self.interface.valueFrameParts.append(self.tkCheck)
+
   def redraw(self):
-    pass
+    if self.row != None:
+      self.disp(self.row)
   
-  def dragMethod(self):
-    pass
+  def dragMethod(self,eventObj):
+    self.setValue(self.interface.yToValue(eventObj.y))
   
 class ViewDuration:
-  def __init__(self,name,startViewTime,endViewTime,assocViewValue,interface,row=None):
+  def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, row=None):
     self.name = name
     self.startViewTime = startViewTime
     self.endViewTime = endViewTime
     self.assocViewValue = assocViewValue
     self.interface = interface
     self.row = row
+   
+    self.tkLabel = None
+  
+  def setName(self, name):
+    if self.name != name:
+      self.name = name
+      self.redraw()  
   
   def setStartViewTime(self, startViewTime):
-    pass
+    self.startViewTime = startViewTime
+    self.interface.redrawCanvas()
+    self.redraw()
 
   def setEndViewTime(self, endViewTime):
-    pass
+    self.endViewTime = endViewTime
+    self.interface.redrawCanvas()
+    self.redraw()
   
   def setViewValue(self, viewValue):
-    pass
-    
-  def setName(self, name):
-    pass
+    self.assocViewValue = viewValue
+    self.interface.redrawCanvas()
+    self.redraw()
   
   def disp(self, row):
-    pass
+    self.row = row
+    labelText = self.name + ': ' + self.startViewTime.name + ' ' + self.endViewTime.name + ' ' + self.assocViewValue.name
+    
+    if self.tkLabel != None:
+      self.tkLabel.destroy()
+
+    self.tkLabel = ttk.Label(self.interface.valueFrame, text=labelText)
+    self.tkLabel.grid(column=0, row=row, sticky='w', columnspan=3, padx=5, pady=5)
+    self.interface.valueFrameParts.append(self.tkLabel)
   
   def redraw(self):
-    pass
+    if self.row != None:
+      self.disp(self.row)
   
   def split(self, middleViewTime):
-    pass
+    [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface)]
   
   def start(self):
-    pass
+    return self.startViewTime.value
   
   def end(self):
-    pass
+    return self.endViewTime.value
   
   def value(self):
-    pass
+    return self.assocViewValue.value
   
-  def dragMethod(self):
-    pass
+  def dragMethod(self,eventObj):
+    self.assocViewValue.setValue(self.interface.yToValue(eventObj.y))
   
 class Interface:
 

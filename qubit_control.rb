@@ -237,7 +237,7 @@ class ViewDuration
   end
   
   def dragProc
-    tempDragProc = proc {|canvasx, canvasy| @assocViewValue.value = @interface.yToValue(canvasy)}
+    proc {|canvasx, canvasy| @assocViewValue.value = @interface.yToValue(canvasy)}
   end
 end
 
