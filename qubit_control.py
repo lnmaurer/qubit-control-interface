@@ -20,9 +20,8 @@ class ViewTime:
   def setValue(self, value):
     if (self.value != value) and (not self.locked):
       sortedTimes =  [t.value for t in self.interface.times]
-      sortedTimes.sort
+      sortedTimes.sort()
       index = sortedTimes.index(self.value)
-      
       #find the limits for what this time can be set to
       if index == 0: #self is the smallest time
 	minTime = None
@@ -33,7 +32,7 @@ class ViewTime:
       else:
 	minTime = sortedTimes[index-1]
 	maxTime = sortedTimes[index+1]
-
+	
       if ((maxTime == None) and (value > minTime)) \
 	or ((minTime == None) and (value < maxTime)) \
 	or ((maxTime != None) and (minTime != None) and (value > minTime) and (value < maxTime)):
@@ -42,7 +41,7 @@ class ViewTime:
 	self.interface.redrawAxisLabels()
 
     #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
-    self.stringVar.set(str(value))
+    self.stringVar.set(str(self.value))
   
   def setName(self, name):
     if self.name != name:
@@ -92,6 +91,30 @@ class ViewTime:
   
   def dragMethod(self, eventObj):
     self.setValue(self.interface.xToTime(eventObj.x))
+    
+  def clickMethod(self, eventObj):
+    iface = self.interface
+    print iface.mode
+    if (iface.mode == 'rename') and (not (iface.nameEntry.get() in [t.name for t in iface.times])):
+      self.setName(iface.nameEntry.get())
+      iface.mode = 'select'
+    elif iface.mode == 'select':
+      iface.view.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas 
+    elif iface.mode == 'deleteTime':
+      #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
+      #todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
+      firstDuration = [d for d in iface.durations if d.endViewTime == self].pop()
+      secondDuration = [d for d in iface.durations if d.startViewTime == self].pop()
+      firstDuration.endViewTime = secondDuration.endViewTime
+      iface.durations.remove(secondDuration) #get rid of second duration
+      iface.times.remove(self) #get rid of self
+    
+      #delete the associated value if there isn't another duration using that value
+      if len([d for d in iface.durations if d.assocViewValue == secondDuration.assocViewValue]) == 0:
+	iface.values.remove(secondDuration.assocViewValue)
+	      
+      iface.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
+      iface.mode = 'select'
   
 class ViewValue:
   def __init__(self,name, value, locked, interface, row=None):
@@ -355,11 +378,18 @@ class Interface:
     self.redrawValueFrame()
   
   def redrawCanvas(self):
-    pass
+    #clean off the canvas
+    self.view.delete('all')
+    
+    for time in self.times:
+      if (time.name != 'Start') and (time.name != 'Stop'): #don't display or do anything for start or stop times
+	lineID = self.view.create_line(self.timeToX(time.value), 0, self.timeToX(time.value), self.viewHeight, width=2, dash='.')
+	self.view.tag_bind(lineID, "<Button-1>",  time.clickMethod)
+	
   
   def redrawAxisLabels(self):
     #only update if something has changed
-    if (self.startValue != self.start.value) or (self.endValue != self.end.value) or (self.maxY != self.maxValue):
+    if (self.startValue != self.start.value) or (self.endValue != self.end.value) or (self.maxY != self.maxValue()):
       for l in self.axisLables:
 	l.destroy()
       
