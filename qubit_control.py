@@ -94,7 +94,7 @@ class ViewTime:
     
   def clickMethod(self, eventObj):
     iface = self.interface
-    if (iface.mode == 'rename') and (not (iface.nameEntry.get() in [t.name for t in iface.times])):
+    if (iface.mode == 'rename') and (iface.nameEntry.get() not in [t.name for t in iface.times]):
       self.setName(iface.nameEntry.get())
       iface.mode = 'select'
     elif iface.mode == 'select':
@@ -109,7 +109,7 @@ class ViewTime:
       iface.times.remove(self) #get rid of self
     
       #delete the associated value if there isn't another duration using that value
-      if len([d for d in iface.durations if d.assocViewValue == secondDuration.assocViewValue]) == 0:
+      if secondDuration.assocViewValue not in [d.assocViewValue for d in iface.durations]:
 	iface.values.remove(secondDuration.assocViewValue)
 	      
       iface.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
@@ -270,7 +270,7 @@ class ViewDuration:
     
   def clickMethod(self, eventObj):
     iface = self.interface
-    if (iface.mode == 'rename') and (not (iface.nameEntry.get() in [d.name for d in iface.durations])): #if we're in rename mode, and the new name isn't in use, then rename it
+    if (iface.mode == 'rename') and (iface.nameEntry.get() not in [d.name for d in iface.durations]): #if we're in rename mode, and the new name isn't in use, then rename it
       self.setName(iface.nameEntry.get())
       iface.mode = 'select'
     elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
@@ -346,7 +346,7 @@ class Interface:
     self.view.grid(column=1, row=0, columnspan=3, rowspan=3, sticky='nsew', padx=5, pady=5)
   
     def canvasClick(eventObj):
-      if (self.mode == 'addTime') and (not (self.nameEntry.get() in [t.name for t in self.times])):
+      if (self.mode == 'addTime') and (self.nameEntry.get() not in [t.name for t in self.times]):
 	time = self.xToTime(eventObj.x)
 	newTime = ViewTime(self.nameEntry.get(),time,False,self)
 	self.times.append(newTime)
