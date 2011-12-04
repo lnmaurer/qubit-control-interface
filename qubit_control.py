@@ -346,7 +346,7 @@ class Interface:
   viewHeight = 200 #height of the view canvas
 
   def __init__(self):
-#The root. This has to come first, because 'StringVar's and 'IntVar's in the 'View____'s need it to be initialized before they can be called.
+#The root. This has to come first, because 'StringVar's and 'IntVar's in the 'View____'s need it to be initialized before they can be created.
     self.root = Tkinter.Tk()
     self.root.title('Qubit Control')
     
@@ -492,7 +492,7 @@ class Interface:
   def redrawAxisLabels(self):
     """Redraws the axis lables in the view frame"""
     
-    #only update if something has changed
+    #only redraw if something has changed
     if (self.startValue != self.start.value) or (self.endValue != self.end.value) or (self.maxY != self.maxValue()):
       for l in self.axisLables:
 	l.destroy()
