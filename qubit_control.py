@@ -3,7 +3,10 @@ import ttk
 
 
 """
-Design overview: The GUI is broken in to three frames:
+Design overview: The GUI is broken in to two tabs. The setup tab handles LabRAD configuration and
+the experiment tab handles the setup of the experiment.
+
+The experiment tab has three frames:
 1) The view frame, which has the canvas where the trace is drawn (will later have multiple canvases
 for multiple traces). Three things are drawn on the canvas: times, values, and durations. More on
 these later.
@@ -350,6 +353,17 @@ class Interface:
     self.root = Tkinter.Tk()
     self.root.title('Qubit Control')
     
+#the notebook has two pages, one for setup and one for the experiment
+    self.noteBook = ttk.Notebook(self.root)
+    self.noteBook.pack()
+    self.setupTab = ttk.Frame(self.noteBook)
+    self.experimentTab = ttk.Frame(self.noteBook)
+    self.setupTab.pack()
+    self.experimentTab.pack()
+    #names for the tabs
+    self.noteBook.add(self.setupTab, text='Setup')
+    self.noteBook.add(self.experimentTab, text='Experiment')
+    
 #set some non-GUI variables
     self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', and 'rename'
     
@@ -366,7 +380,7 @@ class Interface:
     self.durations = [ViewDuration('Initial',self.start,self.end,initialValue,self)]
     
 #The control frame
-    self.controlFrame = ttk.Labelframe(self.root, text='Controls')
+    self.controlFrame = ttk.Labelframe(self.experimentTab, text='Controls')
     self.controlFrame.grid(column=0,row=1,columnspan=2,sticky='nsew',padx=5,pady=5)
    
     def addTimeMode():
@@ -391,7 +405,7 @@ class Interface:
 #The view frame and canvas
     self.axisLables = []
 
-    self.viewFrame = ttk.Labelframe(self.root,text='SRAM View')
+    self.viewFrame = ttk.Labelframe(self.experimentTab,text='SRAM View')
     self.viewFrame.grid(column=0,row=0,columnspan=2,sticky='nsew',padx=5,pady=5)
 
     self.view = Tkinter.Canvas(self.viewFrame, width=self.viewWidth, height=self.viewHeight) #todo: make array so that we can have more than one view
@@ -420,7 +434,7 @@ class Interface:
 #The value frame
     self.valueFrameParts = []
 
-    self.valueFrame = ttk.Labelframe(self.root,text='Values')
+    self.valueFrame = ttk.Labelframe(self.experimentTab,text='Values')
     self.valueFrame.grid(column=2, row=0, sticky='nsew', rowspan=2, padx=5, pady=5)
     self.valueFrameParts = [] #will contain all the widgets in the value frame so that we can destroy them even after the object they belong to gets destroyed
     self.redrawValueFrame()
@@ -535,7 +549,7 @@ class Interface:
     self.redrawValueFrame()
     
   def maxValue(self):
-    """Returns 1.25 times the value of the larges ViewValue so that the trace can be scaled directly on the canvas"""
+    """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
     rawvalues =  [x.value for x in self.values]
     rawvalues.sort()
     return 1.25*rawvalues[-1] #return 1.25 times the largest value
