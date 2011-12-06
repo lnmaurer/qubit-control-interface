@@ -1,5 +1,6 @@
 import Tkinter
 import ttk
+import labrad
 
 
 """
@@ -349,7 +350,10 @@ class Interface:
   viewHeight = 200 #height of the view canvas
 
   def __init__(self):
-#The root. This has to come first, because 'StringVar's and 'IntVar's in the 'View____'s need it to be initialized before they can be created.
+#The LabRAD connection
+    self.labRADconnection = None #don't connect until later
+    
+#The root. This has to come before the other GUI stuff, because 'StringVar's and 'IntVar's in the 'View____'s need it to be initialized before they can be created.
     self.root = Tkinter.Tk()
     self.root.title('Qubit Control')
     
@@ -362,9 +366,9 @@ class Interface:
     self.experimentTab.pack()
     #names for the tabs
     self.noteBook.add(self.setupTab, text='Setup')
-    self.noteBook.add(self.experimentTab, text='Experiment')
+    self.noteBook.add(self.experimentTab, text='Experiment')    
     
-#set some non-GUI variables
+#set some variables used by the GUI
     self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', and 'rename'
     
     #initialize these to None so that redrawAxisLabels knows to do its thing
@@ -378,7 +382,36 @@ class Interface:
     self.times = [self.start, self.end]
     self.values = [initialValue]
     self.durations = [ViewDuration('Initial',self.start,self.end,initialValue,self)]
+
+#The setup tab
+    #the server address entry
+    ttk.Label(self.setupTab, text='Server address:').grid(column=0, row=0, sticky='e', padx=5, pady=5)
+    self.serverAddress = Tkinter.StringVar()
+    self.serverAddress.set('localhost') #todo: read out of a config file that saves previous entry
+    ttk.Entry(self.setupTab, textvariable=self.serverAddress).grid(column=1, row=0, sticky='w', padx=5, pady=5)   
+
+    #the server port entry
+    ttk.Label(self.setupTab, text='Server port:').grid(column=0, row=1, sticky='e', padx=5, pady=5)
+    self.serverPort = Tkinter.StringVar()
+    self.serverPort.set('7682') #todo: read out of a config file that saves previous entry
+    ttk.Entry(self.setupTab, textvariable=self.serverPort).grid(column=1, row=1, sticky='w', padx=5, pady=5)
     
+    #the server password
+    ttk.Label(self.setupTab, text='Server password:').grid(column=0, row=2, sticky='e', padx=5, pady=5)
+    self.serverPassword = Tkinter.StringVar()
+    self.serverPassword.set('test') #todo: read out of a config file that saves previous entry
+    ttk.Entry(self.setupTab, textvariable=self.serverPassword, show='*').grid(column=1, row=2, sticky='w', padx=5, pady=5)
+    
+    #button to connect to server
+    def connectToServer():
+      #todo: error handling for when the following doesn't work
+      self.labRADconnection = labrad.connect(self.serverAddress.get(),
+					     port=int(self.serverPort.get()),
+					     password=self.serverPassword.get())
+      print self.labRADconnection.servers #testcode
+      
+    ttk.Button(self.setupTab, text='Connect', command=connectToServer).grid(column=1, row=3,sticky='nsew', padx=5, pady=5)
+
 #The control frame
     self.controlFrame = ttk.Labelframe(self.experimentTab, text='Controls')
     self.controlFrame.grid(column=0,row=1,columnspan=2,sticky='nsew',padx=5,pady=5)
