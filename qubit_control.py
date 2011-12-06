@@ -384,34 +384,45 @@ class Interface:
     self.durations = [ViewDuration('Initial',self.start,self.end,initialValue,self)]
 
 #The setup tab
-    #the server address entry
-    ttk.Label(self.setupTab, text='Server address:').grid(column=0, row=0, sticky='e', padx=5, pady=5)
-    self.serverAddress = Tkinter.StringVar()
-    self.serverAddress.set('localhost') #todo: read out of a config file that saves previous entry
-    ttk.Entry(self.setupTab, textvariable=self.serverAddress).grid(column=1, row=0, sticky='w', padx=5, pady=5)   
+    #the manager address entry
+    ttk.Label(self.setupTab, text='Manager address:').grid(column=0, row=0, sticky='e', padx=5, pady=5)
+    self.managerAddress = Tkinter.StringVar()
+    self.managerAddress.set('localhost') #todo: read out of a config file that saves previous entry
+    ttk.Entry(self.setupTab, textvariable=self.managerAddress).grid(column=1, row=0, sticky='w', padx=5, pady=5)   
 
-    #the server port entry
-    ttk.Label(self.setupTab, text='Server port:').grid(column=0, row=1, sticky='e', padx=5, pady=5)
-    self.serverPort = Tkinter.StringVar()
-    self.serverPort.set('7682') #todo: read out of a config file that saves previous entry
-    ttk.Entry(self.setupTab, textvariable=self.serverPort).grid(column=1, row=1, sticky='w', padx=5, pady=5)
+    #the manager port entry
+    ttk.Label(self.setupTab, text='Manager port:').grid(column=0, row=1, sticky='e', padx=5, pady=5)
+    self.managerPort = Tkinter.StringVar()
+    self.managerPort.set('7682') #todo: read out of a config file that saves previous entry
+    ttk.Entry(self.setupTab, textvariable=self.managerPort).grid(column=1, row=1, sticky='w', padx=5, pady=5)
     
-    #the server password
-    ttk.Label(self.setupTab, text='Server password:').grid(column=0, row=2, sticky='e', padx=5, pady=5)
-    self.serverPassword = Tkinter.StringVar()
-    self.serverPassword.set('test') #todo: read out of a config file that saves previous entry
-    ttk.Entry(self.setupTab, textvariable=self.serverPassword, show='*').grid(column=1, row=2, sticky='w', padx=5, pady=5)
+    #the manager password
+    ttk.Label(self.setupTab, text='Manager password:').grid(column=0, row=2, sticky='e', padx=5, pady=5)
+    self.managerPassword = Tkinter.StringVar()
+    self.managerPassword.set('test') #todo: read out of a config file that saves previous entry
+    ttk.Entry(self.setupTab, textvariable=self.managerPassword, show='*').grid(column=1, row=2, sticky='w', padx=5, pady=5)
     
-    #button to connect to server
-    def connectToServer():
+    #button to connect to manager
+    def connectToManager():
       #todo: error handling for when the following doesn't work
-      self.labRADconnection = labrad.connect(self.serverAddress.get(),
-					     port=int(self.serverPort.get()),
-					     password=self.serverPassword.get())
-      print self.labRADconnection.servers #testcode
+      self.labRADconnection = labrad.connect(self.managerAddress.get(),
+					     port=int(self.managerPort.get()),
+					     password=self.managerPassword.get())
+      self.serverListbox.delete(0, Tkinter.END) #if the listbox is already populated, clear it
+      for serverName in str(self.labRADconnection.servers).rsplit("\n"):
+	self.serverListbox.insert(Tkinter.END, serverName) #add all the server names to the listbox
+	
       
-    ttk.Button(self.setupTab, text='Connect', command=connectToServer).grid(column=1, row=3,sticky='nsew', padx=5, pady=5)
+    ttk.Button(self.setupTab, text='Connect', command=connectToManager).grid(column=1, row=3,sticky='nsew', padx=5, pady=5)
 
+    #the listbox that will show the available servers
+    ttk.Label(self.setupTab, text='Available Servers:').grid(column=2, row=0, sticky='s', padx=30, pady=5)
+    self.serverListbox = Tkinter.Listbox(self.setupTab, height=8, selectmode=Tkinter.MULTIPLE) #todo: is there now ttk version of this?
+    self.serverListbox.grid(column=2, row=1, rowspan=8, sticky='n', padx=0, pady=5)
+    scrollbar = ttk.Scrollbar(self.setupTab, orient=Tkinter.VERTICAL, command=self.serverListbox.yview)
+    scrollbar.grid(column=3, row=1, rowspan=8, sticky='nsw', padx=0, pady=5)
+    self.serverListbox.configure(yscrollcommand=scrollbar.set)
+    
 #The control frame
     self.controlFrame = ttk.Labelframe(self.experimentTab, text='Controls')
     self.controlFrame.grid(column=0,row=1,columnspan=2,sticky='nsew',padx=5,pady=5)
@@ -438,7 +449,7 @@ class Interface:
 #The view frame and canvas
     self.axisLables = []
 
-    self.viewFrame = ttk.Labelframe(self.experimentTab,text='SRAM View')
+    self.viewFrame = ttk.Labelframe(self.experimentTab,text='Trace View')
     self.viewFrame.grid(column=0,row=0,columnspan=2,sticky='nsew',padx=5,pady=5)
 
     self.view = Tkinter.Canvas(self.viewFrame, width=self.viewWidth, height=self.viewHeight) #todo: make array so that we can have more than one view
