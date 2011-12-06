@@ -64,8 +64,9 @@ class ViewTime:
 	or ((minTime == None) and (value < maxTime)) \
 	or ((maxTime != None) and (minTime != None) and (value > minTime) and (value < maxTime)):
 	self.value = value
-	self.interface.redrawCanvas()
-	self.interface.redrawAxisLabels()
+	#since times are on every trace, need to update all of them
+	self.interface.redrawAllCanvases()
+	self.interface.redrawAllXaxies()
 
     #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
     self.stringVar.set(str(self.value))
@@ -102,7 +103,6 @@ class ViewTime:
     def entryMethod(eventObj):
       if self.tkEntry.get() != '':
 	self.setValue(float(self.tkEntry.get()))
-	self.interface.redrawCanvas()
       return 1
     self.tkEntry.bind("<Return>",entryMethod)
     
@@ -131,18 +131,21 @@ class ViewTime:
       self.setName(iface.nameEntry.get()) #set the name if we're in rename mode
       iface.mode = 'select'
     elif iface.mode == 'select':
-      iface.view.bind('<B1-Motion>', self.dragMethod) #allow the line on the canvas to be dragged after it's clicked on
+      for canvas in iface.canvases():
+	canvas.bind('<B1-Motion>', self.dragMethod) #allow the line on the canvas to be dragged after it's clicked on
     elif (iface.mode == 'deleteTime') and not self.locked:
-      #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
-      #todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
-      firstDuration = [d for d in iface.durations if d.endViewTime == self].pop()
-      secondDuration = [d for d in iface.durations if d.startViewTime == self].pop()
-      firstDuration.endViewTime = secondDuration.endViewTime
-      iface.durations.remove(secondDuration) #get rid of second duration
+      for trace in iface.traces: #there's a duration to remove in every trace
+	#plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
+	#todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
+	firstDuration = [d for d in trace.durations if d.endViewTime == self].pop()
+	secondDuration = [d for d in trace.durations if d.startViewTime == self].pop()
+	firstDuration.endViewTime = secondDuration.endViewTime #change first duration so that it covers bother durations
+	trace.durations.remove(secondDuration) #get rid of second duration
+      
       iface.times.remove(self) #get rid of self
     
       #delete the associated value if there isn't another duration using that value
-      if secondDuration.assocViewValue not in [d.assocViewValue for d in iface.durations]:
+      if secondDuration.assocViewValue not in [d.assocViewValue for d in iface.durations()]:
 	iface.values.remove(secondDuration.assocViewValue)
 	      
       iface.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
@@ -171,9 +174,11 @@ class ViewValue:
       self.value = value
       self.stringVar.set(str(value))
       
-      self.interface.redrawCanvas()
-      self.interface.redrawAxisLabels()
-  
+      #update all the traces which have this value
+      for trace in [t for t in self.interface.traces if self in t.values()]:
+	trace.redrawCanvas()
+	trace.redrawYaxis()
+	
   def setName(self, name):
     """Sets the value's name and redraws the value frame. The name can only be changed if the value isn't locked."""
     if (self.name != name) and (not self.locked): #The first condition prevents needless refreshes if the name hasn't changed
@@ -206,7 +211,6 @@ class ViewValue:
     def entryMethod(eventObj):
       if self.tkEntry.get() != '':
 	self.setValue(float(self.tkEntry.get()))
-	self.interface.redrawCanvas()
       return 1
     self.tkEntry.bind("<Return>",entryMethod)
     
@@ -224,9 +228,9 @@ class ViewValue:
     if self.row != None:
       self.disp(self.row)
   
-  def dragMethod(self, eventObj):
-    """Used for changing the value by dragging the line on the canvas"""
-    self.setValue(self.interface.yToValue(eventObj.y))
+  def dragMethod(self, eventObj, trace):
+    """Used for changing the value by dragging the line on the canvas. Needs to know the trace it's attached to because they can have different y scales."""
+    self.setValue(trace.yToValue(eventObj.y))
     
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
@@ -240,23 +244,25 @@ class ViewValue:
 	iface.values.remove(self) #get rid of the current value from the list
 	replacementValue = valuesWithSameName.pop()
 	  
-	for dur in [d for d in iface.durations if d.assocViewValue == self]:
+	for dur in [d for d in iface.durations() if d.assocViewValue == self]:
 	  dur.assocViewValue = replacementValue
       else: #no value uses that name
 	self.setName(newName) #if no value with this name already exists, merely change the name of self
       iface.refresh() #number of values can change, and the duration section of the viewframe needs to be redrawn since this value's name has changed      
       iface.mode = 'select'
     elif iface.mode == 'select':
-      iface.view.bind('<B1-Motion>', self.dragMethod) #allow the line on the canvas to be dragged after it's clicked on
+      for trace in iface.traces:
+	trace.view.bind('<B1-Motion>', lambda eventObj: self.dragMethod(eventObj, trace)) #allow the line on the canvas to be dragged after it's clicked on. Need to let it know which trace it's connected to since they have different y scales
 
 class ViewDuration:
   """The class for a duration drawn on the graph"""
-  def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, row=None):
+  def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, trace, row=None):
     self.name = name
     self.startViewTime = startViewTime
     self.endViewTime = endViewTime
     self.assocViewValue = assocViewValue
     self.interface = interface
+    self.trace = trace
     self.row = row
    
     self.tkLabel = None
@@ -270,25 +276,25 @@ class ViewDuration:
   def setStartViewTime(self, startViewTime):
     """Sets the start time of the duration to the given ViewTime"""
     self.startViewTime = startViewTime
-    self.interface.redrawCanvas()
+    self.trace.redrawCanvas()
     self.redraw()
 
   def setEndViewTime(self, endViewTime):
     """Sets the end time of the duration to the given ViewTime"""
     self.endViewTime = endViewTime
-    self.interface.redrawCanvas()
+    self.trace.redrawCanvas()
     self.redraw()
   
   def setViewValue(self, viewValue):
     """Sets the value associated with the duration to the given ViewValue"""
     self.assocViewValue = viewValue
-    self.interface.redrawCanvas()
+    self.trace.redrawCanvas()
     self.redraw()
   
   def disp(self, row):
     """Draws a label in the value frame listing the start time name, end time name, and associated value's name"""
     self.row = row
-    labelText = self.name + ': ' + self.startViewTime.name + ' ' + self.endViewTime.name + ' ' + self.assocViewValue.name
+    labelText = self.trace.name + ', ' + self.name + ': ' + self.startViewTime.name + ' ' + self.endViewTime.name + ' ' + self.assocViewValue.name
     
     if self.tkLabel != None:
       self.tkLabel.destroy()
@@ -304,7 +310,7 @@ class ViewDuration:
   
   def split(self, middleViewTime):
     """Returns the two durations that would result from splitting this duration in to two parts at the time given by middleViewTime"""
-    return [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface)]
+    return [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface,self.trace), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface,self.trace)]
   
   def start(self):
     """Returns the time of the start time"""
@@ -320,16 +326,16 @@ class ViewDuration:
   
   def dragMethod(self, eventObj):
     """Used for changing the value by dragging the line on the canvas"""
-    self.assocViewValue.setValue(self.interface.yToValue(eventObj.y))
+    self.assocViewValue.setValue(self.trace.yToValue(eventObj.y))
     
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
     iface = self.interface
-    if (iface.mode == 'rename') and (iface.nameEntry.get() not in [d.name for d in iface.durations]): #if we're in rename mode, and the new name isn't in use, then rename it
+    if (iface.mode == 'rename') and (iface.nameEntry.get() not in [d.name for d in iface.durations()]): #if we're in rename mode, and the new name isn't in use, then rename it
       self.setName(iface.nameEntry.get())
       iface.mode = 'select'
     elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
-      if self.assocViewValue in [d.assocViewValue for d in iface.durations if d != self] != 0:
+      if self.assocViewValue in [d.assocViewValue for d in iface.durations() if d != self] != 0:
 	#more than one other duration uses this value
 	#need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
 	count = 1 #count holds the number we'll append to the end of the name
@@ -341,8 +347,152 @@ class ViewDuration:
 	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
 	
       #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
-      iface.view.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
+      self.trace.view.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
 
+class ViewTrace:
+  def __init__(self, name, interface, row, initialValue):
+    self.name = name
+    self.interface = interface
+    self.row = row
+    self.times = interface.times
+    
+    self.viewFrame = ttk.Labelframe(self.interface.viewFrame, text=name)
+    self.viewFrame.grid (column=0, row=self.row, sticky='nsew', padx=5, pady=5)
+    
+    self.xAxisLables = []
+    self.yAxisLables = []
+    self.startValue = None
+    self.endValue = None
+    self.maxY = None
+
+    #to save typing .interface a bazillion times
+    self.timeToX = self.interface.timeToX
+    self.xToTime = self.interface.xToTime
+    self.viewWidth = self.interface.viewWidth
+    self.viewHeight = self.interface.viewHeight
+    self.start = self.interface.start
+    self.end = self.interface.end    
+    
+    self.durations = [ViewDuration('Initial', self.start, self.end, initialValue, self.interface, self)]
+    
+    self.view = Tkinter.Canvas(self.viewFrame, width=self.interface.viewWidth, height=self.interface.viewHeight) #todo: make array so that we can have more than one view
+    self.view.grid(column=1, row=0, columnspan=3, rowspan=3, sticky='nsew', padx=5, pady=5)
+  
+    self.view.bind("<Button-1>",  self.canvasClick)  
+    
+    #make it so that, after dragging an element has ceased, the binding is reset so that further dragging won't move the element unless it gets clicked again first
+    #we do this by binding to any motion on the canvas
+    self.view.bind("<Motion>", lambda e: self.view.bind("<B1-Motion>", lambda e: None))
+    
+    self.redrawCanvas()
+    self.redrawXaxis()
+    self.redrawYaxis() 
+
+  def redrawCanvas(self):
+    """Clears the canvas and redraws everything on it"""
+    
+    #first, clear everything off the canvas (but don't delete the canvas itself)
+    self.view.delete('all')
+    
+    #next, draw all the ViewTimes
+    for time in self.interface.times:
+      if (time.name != 'Start') and (time.name != 'Stop'): #don't display anything for start or stop times; that way they can't be edited through the canvas
+	lineID = self.view.create_line(self.timeToX(time.value), 0, self.timeToX(time.value), self.viewHeight, width=2, dash='.') #draw the line
+	self.view.tag_bind(lineID, "<Button-1>",  time.clickMethod) #bind the line to it's clickMethod so that it can be interacted with
+
+    #next, draw all the ViewValues
+    for value in self.values():
+      lineID = self.view.create_line(0, self.valueToY(value.value), self.viewWidth, self.valueToY(value.value), width=1, fill='red', dash='.')
+      self.view.tag_bind(lineID, "<Button-1>",  value.clickMethod)
+
+    #finially, draw all the ViewDurations. Because this comes last, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
+    for dur in self.durations:
+      lineID = self.view.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
+      self.view.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
+  
+  def redrawXaxis(self):
+    """Redraws the axis lables in the view frame"""
+    
+    #only redraw if something has changed
+    if (self.startValue != self.start.value) or (self.endValue != self.end.value):
+      for l in self.xAxisLables:
+	l.destroy()
+      
+      self.xAxisLables = []
+    
+      self.startValue = self.start.value
+      tmp = ttk.Label(self.viewFrame, text=str(self.startValue))
+      tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
+      self.xAxisLables.append(tmp)
+    
+      tmp = ttk.Label(self.viewFrame, text='Time (UNITS???)')
+      tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
+      self.xAxisLables.append(tmp)
+    
+      self.endValue = self.end.value
+      tmp = ttk.Label(self.viewFrame, text=str(self.endValue))
+      tmp.grid(column=3, row=3, sticky='e', padx=0, pady=5)
+      self.xAxisLables.append(tmp)
+  
+  def redrawYaxis(self):
+    if self.maxY != self.maxValue():
+      for l in self.yAxisLables:
+	l.destroy()
+	
+      self.yAxisLables = []
+      
+      self.maxY = self.maxValue()
+      tmp = ttk.Label(self.viewFrame, text=str(self.maxY))
+      tmp.grid(column=0, row=0, sticky='ne', padx=0, pady=5)
+      self.yAxisLables.append(tmp)
+    
+      tmp = ttk.Label(self.viewFrame, text='??? (UNITS???)')
+      tmp.grid(column=0, row=1,sticky='nse', padx=0, pady=5)
+      self.yAxisLables.append(tmp)
+    
+      tmp = ttk.Label(self.viewFrame, text = '0')
+      tmp.grid(column=0, row=2,sticky='se', padx=0, pady=5)
+      self.yAxisLables.append(tmp)
+  
+  def values(self):
+    """Returns a list of all values associated with durations drawn on this trace"""
+    return [d.assocViewValue for d in self.durations]
+
+  def canvasClick(self, eventObj, clickedFirst = True):
+    """This is called when the canvas is clicked, or when a time was added to another canvas"""
+    mode = self.interface.mode
+    newName = self.interface.nameEntry.get()
+    newTime = None #will hold the new time if one needs to be made
+    if (mode == 'addTime'):
+      if newName not in [t.name for t in self.interface.times]: #the name isn't in interface yet; this was the inter
+	time = self.interface.xToTime(eventObj.x)
+	newTime = ViewTime(newName,time,False,self.interface)
+	self.interface.times.append(newTime) #add this new time to the list of times stored in the interface
+	self.interface.aCanvasWasClicked(eventObj,self) #tell the interface so the time can be added to others
+	self.interface.redrawValueFrame() #added a new time, so redraw the value frame
+      else: #the name was in the interface, so retrieve it
+	newTime = [t for t in self.interface.times if t.name == newName].pop()
+	
+      if newTime != None:
+	toSplit = [d for d in self.durations if (d.start() < newTime.value) and (d.end() > newTime.value)].pop() #find the duration that's getting chopped by this
+	self.durations.remove(toSplit) #remove the duration that's getting chopped by this
+	self.durations.extend(toSplit.split(newTime)) #add the two new durations
+	self.redrawCanvas() #we've added a new time, so have to redraw canvas
+	
+  def maxValue(self):
+    """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
+    rawvalues =  [d.assocViewValue.value for d in self.durations]
+    rawvalues.sort()
+    return 1.25*rawvalues[-1] #return 1.25 times the largest value
+  
+  def valueToY(self, value):
+    """Converts from value to canvas y coordinate"""
+    return -float(self.interface.viewHeight)/self.maxValue() * value + self.interface.viewHeight
+    
+  def yToValue(self, y):
+    """Converts from canvas y coordinate to value"""
+    return -self.maxValue()/self.interface.viewHeight * y + self.maxValue() 
+    
 class Interface:
   """The class for the GUI interface"""
   
@@ -366,22 +516,10 @@ class Interface:
     self.experimentTab.pack()
     #names for the tabs
     self.noteBook.add(self.setupTab, text='Setup')
-    self.noteBook.add(self.experimentTab, text='Experiment')    
+    self.noteBook.add(self.experimentTab, text='Experiment', state='disabled') #experiment tab starts out disabled; it's enabled after we connect to a server and set up traces
     
 #set some variables used by the GUI
     self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', and 'rename'
-    
-    #initialize these to None so that redrawAxisLabels knows to do its thing
-    self.startValue = None
-    self.endValue = None
-    self.maxY = None
-    
-    self.start = ViewTime('Start',0.0,True,self)
-    self.end = ViewTime('Stop',1000.0,True,self)
-    initialValue = ViewValue('Initial',1,False,self)
-    self.times = [self.start, self.end]
-    self.values = [initialValue]
-    self.durations = [ViewDuration('Initial',self.start,self.end,initialValue,self)]
 
 #The setup tab
     #the manager address entry
@@ -408,7 +546,7 @@ class Interface:
       self.labRADconnection = labrad.connect(self.managerAddress.get(),
 					     port=int(self.managerPort.get()),
 					     password=self.managerPassword.get())
-      self.serverListbox.delete(0, Tkinter.END) #if the listbox is already populated, clear it
+      self.serverListbox.delete(0, Tkinter.END) #if the listbox is already populated, clear it, this is unnescessary at present
       for serverName in str(self.labRADconnection.servers).rsplit("\n"):
 	self.serverListbox.insert(Tkinter.END, serverName) #add all the server names to the listbox
 	
@@ -422,6 +560,24 @@ class Interface:
     scrollbar = ttk.Scrollbar(self.setupTab, orient=Tkinter.VERTICAL, command=self.serverListbox.yview)
     scrollbar.grid(column=3, row=1, rowspan=8, sticky='nsw', padx=0, pady=5)
     self.serverListbox.configure(yscrollcommand=scrollbar.set)
+    
+    #once the servers are selected in the listbox, clicking this button will make traces for the selected servers
+    def makeTraces():
+      makeTracesButton.config(state='disabled') #for now, we disable the button after it's clicked, this means traces can be made only once
+      self.noteBook.tab(1, state='normal') #the experiment tab is in position 1, so that's what we enable
+      self.populateExperimentTab() #now that we know how many traces to make, we can draw the experiment tab
+      
+    makeTracesButton = ttk.Button(self.setupTab, text='make traces for selected', command=makeTraces)
+    makeTracesButton.grid(column=2, row=9, sticky='n', padx=5, pady=5)
+
+  def populateExperimentTab(self):
+    """Populates the experiment tab with widgets; call after deciding what servers we want traces for"""
+
+    self.start = ViewTime('Start',0.0,True,self)
+    self.end = ViewTime('Stop',1000.0,True,self)
+    initialValue = ViewValue('Initial',1,False,self)
+    self.times = [self.start, self.end]
+    self.values = [initialValue]
     
 #The control frame
     self.controlFrame = ttk.Labelframe(self.experimentTab, text='Controls')
@@ -447,33 +603,15 @@ class Interface:
     self.nameEntry.grid(column=4, row=0,sticky='w', padx=5, pady=5)
 
 #The view frame and canvas
-    self.axisLables = []
-
+    #print [int(i) for i in self.serverListbox.curselection()]
     self.viewFrame = ttk.Labelframe(self.experimentTab,text='Trace View')
     self.viewFrame.grid(column=0,row=0,columnspan=2,sticky='nsew',padx=5,pady=5)
 
-    self.view = Tkinter.Canvas(self.viewFrame, width=self.viewWidth, height=self.viewHeight) #todo: make array so that we can have more than one view
-    self.view.grid(column=1, row=0, columnspan=3, rowspan=3, sticky='nsew', padx=5, pady=5)
-  
-    def canvasClick(eventObj):
-      if (self.mode == 'addTime') and (self.nameEntry.get() not in [t.name for t in self.times]):
-	time = self.xToTime(eventObj.x)
-	newTime = ViewTime(self.nameEntry.get(),time,False,self)
-	self.times.append(newTime)
-	toSplit = [d for d in self.durations if (d.start() < time) and (d.end() > time)].pop() #find the duration that's getting chopped by this
-	self.durations.remove(toSplit) #remove the duration that's getting chopped by this
-	self.durations.extend(toSplit.split(newTime)) #add the two new durations
-	self.mode = 'select' #put back in select mode after adding one time
-	self.refresh() #we've added a new time, so have to redraw canvas and values frame from scratch
-
-    self.view.bind("<Button-1>",  canvasClick)  
+    self.traces = []
     
-    #make it so that, after dragging an element has ceased, the binding is reset so that further dragging won't move the element unless it gets clicked again first
-    #we do this by binding to any motion on the canvas
-    self.view.bind("<Motion>", lambda e: self.view.bind("<B1-Motion>", lambda e: None))
-    
-    self.redrawCanvas()
-    self.redrawAxisLabels()   
+    #todo: populate self.traces correctly
+    self.traces.append(ViewTrace('test', self, 0, initialValue))
+    self.traces.append(ViewTrace('test2', self, 1, initialValue))
     
 #The value frame
     self.valueFrameParts = []
@@ -484,7 +622,7 @@ class Interface:
     self.redrawValueFrame()
   
   def redrawValueFrame(self):
-    """Completely redraws the value frame of the interace"""
+    """Completely redraws the value frame of the interface"""
     
     #first, clear out all the old stuff from the frame
     for l in self.valueFrameParts:
@@ -521,83 +659,48 @@ class Interface:
     
     row +=1
     
-    for el in self.durations:
+    for el in self.durations():
       el.disp(row)
       row += 1
   
-  def redrawCanvas(self):
-    """Clears the canvas and redraws everything on it"""
-    
-    #first, clear everything off the canvas (but don't delete the canvas itself)
-    self.view.delete('all')
-    
-    #next, draw all the ViewTimes
-    for time in self.times:
-      if (time.name != 'Start') and (time.name != 'Stop'): #don't display anything for start or stop times; that way they can't be edited through the canvas
-	lineID = self.view.create_line(self.timeToX(time.value), 0, self.timeToX(time.value), self.viewHeight, width=2, dash='.') #draw the line
-	self.view.tag_bind(lineID, "<Button-1>",  time.clickMethod) #bind the line to it's clickMethod so that it can be interacted with
-
-    #next, draw all the ViewValues
-    for value in self.values:
-      lineID = self.view.create_line(0, self.valueToY(value.value), self.viewWidth, self.valueToY(value.value), width=1, fill='red', dash='.')
-      self.view.tag_bind(lineID, "<Button-1>",  value.clickMethod)
-
-    #finially, draw all the ViewDurations. Because this comes last, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
-    for dur in self.durations:
-      lineID = self.view.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
-      self.view.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
-  
-  def redrawAxisLabels(self):
-    """Redraws the axis lables in the view frame"""
-    
-    #only redraw if something has changed
-    if (self.startValue != self.start.value) or (self.endValue != self.end.value) or (self.maxY != self.maxValue()):
-      for l in self.axisLables:
-	l.destroy()
-      
-      self.axisLables = []
-    
-      #the next three lables are for the x axis
-      self.startValue = self.start.value
-      tmp = ttk.Label(self.viewFrame, text=str(self.startValue))
-      tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
-      self.axisLables.append(tmp)
-    
-      tmp = ttk.Label(self.viewFrame, text='Time (UNITS???)')
-      tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
-      self.axisLables.append(tmp)
-    
-      self.endValue = self.end.value
-      tmp = ttk.Label(self.viewFrame, text=str(self.endValue))
-      tmp.grid(column=3, row=3, sticky='e', padx=0, pady=5)
-      self.axisLables.append(tmp)
-    
-      #next three lables are for y axis
-      self.maxY = self.maxValue()
-      tmp = ttk.Label(self.viewFrame, text=str(self.maxY))
-      tmp.grid(column=0, row=0, sticky='ne', padx=0, pady=5)
-      self.axisLables.append(tmp)
-    
-      tmp = ttk.Label(self.viewFrame, text='??? (UNITS???)')
-      tmp.grid(column=0, row=1,sticky='nse', padx=0, pady=5)
-      self.axisLables.append(tmp)
-    
-      tmp = ttk.Label(self.viewFrame, text = '0')
-      tmp.grid(column=0, row=2,sticky='se', padx=0, pady=5)
-      self.axisLables.append(tmp)
-  
   def refresh(self):
     """Redraw all the parts of the GUI that can change"""
-    self.redrawCanvas()
-    self.redrawAxisLabels()
+    self.redrawAllCanvases()
+    self.redrawAllXaxies()
+    self.redrawAllYaxies()
     self.redrawValueFrame()
     
-  def maxValue(self):
-    """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
-    rawvalues =  [x.value for x in self.values]
-    rawvalues.sort()
-    return 1.25*rawvalues[-1] #return 1.25 times the largest value
-  
+  def redrawAllCanvases(self):  
+    for trace in self.traces:
+      trace.redrawCanvas()
+      
+  def redrawAllXaxies(self):
+    for trace in self.traces:
+      trace.redrawXaxis() 
+
+  def redrawAllYaxies(self):
+    for trace in self.traces:
+      trace.redrawYaxis() 
+      
+  def aCanvasWasClicked(self, eventObj, clickedTrace):
+    """Call when a canvas was clicked; it updates all the other canvases"""
+    for trace in self.traces:
+      if trace != clickedTrace:
+	trace.canvasClick(eventObj,False) #update the other traces, but let them know they weren't the first clicked
+    self.mode = 'select' #put back in select mode after the time has been added
+
+  def durations(self):
+    """Returns a list of all the durations in all the traces"""
+    durations = []
+    for trace in self.traces:
+      durations.extend(trace.durations)
+    return durations
+    
+  def canvases(self):
+    """Returns a list of all canvases"""
+    return [t.view for t in self.traces]
+    
+  #all traces have the same x axis, so we can keep these functions in the interface
   def maxTime(self):
     """Returns the time of the largest ViewTime"""
     return self.end.value
@@ -606,19 +709,11 @@ class Interface:
     """Coverts from time to canvas x coordinate"""
     return float(self.viewWidth)/self.maxTime() * time
   
-  def valueToY(self, value):
-    """Converts from value to canvas y coordinate"""
-    return -float(self.viewHeight)/self.maxValue() * value + self.viewHeight
-  
   def xToTime(self, x):
     """Converts from canvas x coordinate to time"""
     return float(self.maxTime())/self.viewWidth * x
   
-  def yToValue(self, y):
-    """Converts from canvas y coordinate to value"""
-    return -self.maxValue()/self.viewHeight * y + self.maxValue()
-  
   
 if __name__ == "__main__":
-  gui = Interface() #make the interace
+  gui = Interface() #make the interface
   gui.root.mainloop() #set it in motion
