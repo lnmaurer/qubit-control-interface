@@ -506,8 +506,8 @@ class ViewTrace:
 class Interface:
   """The class for the GUI interface"""
   
-  viewWidth = 600 #width of the view canvas
-  viewHeight = 200 #height of the view canvas
+  viewWidth = 500 #width of the view canvas
+  viewHeight = 100 #height of the view canvas
 
   def __init__(self):
 #The LabRAD connection
@@ -591,7 +591,7 @@ class Interface:
     
 #The control frame
     self.controlFrame = ttk.Labelframe(self.experimentTab, text='Controls')
-    self.controlFrame.grid(column=0,row=1,columnspan=2,sticky='nsew',padx=5,pady=5)
+    self.controlFrame.grid(column=0,row=1,sticky='nsew',padx=5,pady=5)
    
     def addTimeMode():
       self.mode = 'addTime'
@@ -615,7 +615,7 @@ class Interface:
 #The view frame and canvas
     #print [int(i) for i in self.serverListbox.curselection()]
     self.viewFrame = ttk.Labelframe(self.experimentTab,text='Traces')
-    self.viewFrame.grid(column=0,row=0,columnspan=2,sticky='nsew',padx=5,pady=5)
+    self.viewFrame.grid(column=0,row=0,sticky='nsew',padx=5,pady=5)
 
     self.traces = []
     
@@ -627,10 +627,27 @@ class Interface:
     self.valueFrameParts = []
 
     self.valueFrame = ttk.Labelframe(self.experimentTab,text='Values')
-    self.valueFrame.grid(column=2, row=0, sticky='nsew', rowspan=2, padx=5, pady=5)
+    self.valueFrame.grid(column=1, row=0, sticky='nsew', rowspan=3, padx=5, pady=5)
     self.valueFrameParts = [] #will contain all the widgets in the value frame so that we can destroy them even after the object they belong to gets destroyed
     self.redrawValueFrame()
   
+#The code frame
+    self.codeFrame = ttk.Labelframe(self.experimentTab,text='Code')
+    self.codeFrame.grid(column=0, row=2, sticky='nsew', padx=5, pady=5)
+    
+    self.codeText = Tkinter.Text(self.codeFrame, width=80, height=10, wrap='none')
+    self.codeText.grid(column=0, row=0, columnspan=3, sticky='se')
+    yscrollbar = ttk.Scrollbar(self.codeFrame, orient=Tkinter.VERTICAL, command=self.codeText.yview)
+    yscrollbar.grid(column=3, row=0, sticky='nsw')
+    self.codeText.configure(yscrollcommand=yscrollbar.set)
+    xscrollbar = ttk.Scrollbar(self.codeFrame, orient=Tkinter.HORIZONTAL, command=self.codeText.xview)
+    xscrollbar.grid(column=0, row=1, columnspan=3, sticky='new')
+    self.codeText.configure(xscrollcommand=xscrollbar.set)
+    
+    ttk.Button(self.codeFrame, text='Test Code').grid(column=0, row=2, padx=5, pady=5)
+    ttk.Button(self.codeFrame, text='Run Code').grid(column=1, row=2, padx=5, pady=5)
+    ttk.Button(self.codeFrame, text='Load Code').grid(column=2, row=2, padx=5, pady=5)
+    
   def redrawValueFrame(self):
     """Completely redraws the value frame of the interface"""
     
