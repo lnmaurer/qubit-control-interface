@@ -98,7 +98,9 @@ class ViewTime:
       self.tkLabel.destroy()
     if self.tkEntry != None:
       self.tkEntry.destroy()
-    
+    if self.tkCheck != None:
+      self.tkCheck.destroy()
+      
     #the label
     self.tkLabel = ttk.Label(self.interface.valueFrame, text=self.name)
     self.tkLabel.grid(column=0, row=row, sticky='w', padx=5, pady=5)
@@ -206,6 +208,8 @@ class ViewValue:
       self.tkLabel.destroy()
     if self.tkEntry != None:
       self.tkEntry.destroy()
+    if self.tkCheck != None:
+      self.tkCheck.destroy()
     
     #the label
     self.tkLabel = ttk.Label(self.interface.valueFrame, text=self.name)
@@ -277,8 +281,12 @@ class ViewDuration:
     self.interface = interface
     self.trace = trace
     self.row = row
+    self.locked = False #when a duration is locked, it cannot be renamed or dragged, but the value and times it's attached to can still be changed
    
     self.tkLabel = None
+    self.tkCheck = None
+    self.intVar = Tkinter.IntVar()
+    self.intVar.set(0)
   
   def setName(self, name):
     """Sets the duration's name and redraws the value frame."""
@@ -311,11 +319,21 @@ class ViewDuration:
     
     if self.tkLabel != None:
       self.tkLabel.destroy()
+    if self.tkCheck != None:
+      self.tkCheck.destroy()
 
     self.tkLabel = ttk.Label(self.interface.valueFrame, text=labelText)
-    self.tkLabel.grid(column=0, row=row, sticky='w', columnspan=3, padx=5, pady=5)
+    self.tkLabel.grid(column=0, row=row, sticky='w', columnspan=2, padx=5, pady=5)
     self.interface.valueFrameParts.append(self.tkLabel)
-  
+
+    #the checkbox handles locking the value
+    def checkMethod():
+      self.locked = (self.intVar.get() == 1)
+      
+    self.tkCheck = ttk.Checkbutton(self.interface.valueFrame, text='Locked?', command=checkMethod, variable=self.intVar)
+    self.tkCheck.grid(column=2, row=row,sticky='w', padx=5, pady=5)   
+    self.interface.valueFrameParts.append(self.tkCheck)    
+    
   def redraw(self):
     """Redraw the widgets in the value frame in the same row as it was before"""    
     if self.row != None:
@@ -344,20 +362,21 @@ class ViewDuration:
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
     iface = self.interface
-    if (iface.mode == 'rename') and (iface.nameEntry.get() not in [d.name for d in iface.durations()]): #if we're in rename mode, and the new name isn't in use, then rename it
-      self.setName(iface.nameEntry.get())
-      iface.mode = 'select'
-    elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
-      if self.assocViewValue in [d.assocViewValue for d in iface.durations() if d != self] != 0:
-	#more than one other duration uses this value
-	#need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
-	count = 1 #count holds the number we'll append to the end of the name
-	while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
-	  count += 1
-	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked,iface)
-	iface.values.append(newValue)
-	self.assocViewValue = newValue
-	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
+    if not self.locked:
+      if (iface.mode == 'rename') and (iface.nameEntry.get() not in [d.name for d in iface.durations()]): #if we're in rename mode, and the new name isn't in use, then rename it
+	self.setName(iface.nameEntry.get())
+	iface.mode = 'select'
+      elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
+	if self.assocViewValue in [d.assocViewValue for d in iface.durations() if d != self] != 0:
+	  #more than one other duration uses this value
+	  #need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
+	  count = 1 #count holds the number we'll append to the end of the name
+	  while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
+	    count += 1
+	  newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked,iface)
+	  iface.values.append(newValue)
+	  self.assocViewValue = newValue
+	  iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
 	
       #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
       self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
