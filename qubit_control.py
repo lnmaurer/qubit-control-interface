@@ -673,7 +673,11 @@ class Interface:
     self.codeText.configure(xscrollcommand=xscrollbar.set)
     
     ttk.Button(self.codeFrame, text='Test Code').grid(column=0, row=2, padx=5, pady=5)
-    ttk.Button(self.codeFrame, text='Run Code').grid(column=1, row=2, padx=5, pady=5)
+    
+    def runCode():
+      exec self.codeText.get('1.0', 'end') in globals()
+      
+    ttk.Button(self.codeFrame, text='Run Code', command=runCode).grid(column=1, row=2, padx=5, pady=5)
     ttk.Button(self.codeFrame, text='Load Code').grid(column=2, row=2, padx=5, pady=5)
     
   def redrawValueFrame(self):
