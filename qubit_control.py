@@ -30,6 +30,14 @@ Because every trace has every time, and adding times break durations in two, at 
 traces have durations with the same start and stop values. I may change that at a later point.
 """
 
+#how on earth does python not have this? Can kind of do it with filter or Comprehensions, but ugly
+#since you want an item but get a list which you have to remove the item from
+def find(f, seq):
+  """Return first item in sequence where f(item) == True. Returns None if there aren't any such items."""
+  for item in seq:
+    if f(item): 
+      return item
+
 class ViewTime:
   """The class for a time drawn on the graph"""
   def __init__(self, name, value, locked, interface, row=None):
@@ -141,8 +149,8 @@ class ViewTime:
       for trace in iface.traces: #there's a duration to remove in every trace
 	#plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
 	#todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
-	firstDuration = [d for d in trace.durations if d.endViewTime == self].pop()
-	secondDuration = [d for d in trace.durations if d.startViewTime == self].pop()
+	firstDuration = find(lambda d: d.endViewTime == self, trace.durations)
+	secondDuration = find(lambda d: d.startViewTime == self, trace.durations)
 	firstDuration.endViewTime = secondDuration.endViewTime #change first duration so that it covers bother durations
 	trace.durations.remove(secondDuration) #get rid of second duration
       
@@ -242,11 +250,12 @@ class ViewValue:
     if iface.mode == 'rename':
       #if this ViewValue is renamed to a name already in use, we merge this ViewValue with the ViewValue sharing its new name
       newName = iface.nameEntry.get() #the new name
-      valuesWithSameName = [v for v in iface.values if v.name == newName] #look for another value with this name
-      if len(valuesWithSameName) != 0:
+      valueWithSameName = find(lambda v: v.name == newName, iface.values) #look for another value with this name
+			 #[v for v in iface.values if v.name == newName]
+      if valueWithSameName != None:
 	#if the named value does exist, we'll get rid of the current value and replace it everywhere with the named value	    
 	iface.values.remove(self) #get rid of the current value from the list
-	replacementValue = valuesWithSameName.pop()
+	replacementValue = valueWithSameName
 	  
 	for dur in [d for d in iface.durations() if d.assocViewValue == self]:
 	  dur.assocViewValue = replacementValue
@@ -481,10 +490,10 @@ class ViewTrace:
 	self.interface.aCanvasWasClicked(eventObj,self) #tell the interface so the time can be added to others; this hanldes resetting the mode
 	self.interface.redrawValueFrame() #added a new time, so redraw the value frame
       else: #the name was in the interface, so retrieve it
-	newTime = [t for t in self.interface.times if t.name == newName].pop()
+	 newTime = find(lambda t: t.name == newName, self.interface.times)
 	
       if newTime != None:
-	toSplit = [d for d in self.durations if (d.start() < newTime.value) and (d.end() > newTime.value)].pop() #find the duration that's getting chopped by this
+	toSplit = find(lambda d: (d.start() < newTime.value) and (d.end() > newTime.value), self.durations)
 	self.durations.remove(toSplit) #remove the duration that's getting chopped by this
 	self.durations.extend(toSplit.split(newTime)) #add the two new durations
 	self.redrawCanvas() #we've added a new time, so have to redraw canvas
@@ -740,7 +749,30 @@ class Interface:
     """Converts from canvas x coordinate to time"""
     return float(self.maxTime())/self.viewWidth * x
   
+  def setValue(self, nameString, newValue):
+    """Sets the value with name nameString to newValue"""
+    value = find(lambda v: v.name == nameString, self.values)
+    if value != None:
+      value.setValue(newValue)
+    else:
+      pass #todo: error handling
+      
+  def setTime(self, nameString, newTime):
+    """Sets the time with name nameString to newTime"""
+    time = find(lambda t: t.name == nameString, self.times)
+    if time != None:
+      time.setValue(newTime)
+    else:
+      pass #todo: error handling
   
 if __name__ == "__main__":
   gui = Interface() #make the interface
+
+  #next two functions will come in useful when evaluating code in code frame
+  def setValue(nameString, newValue):
+    gui.setValue(nameString, newValue)
+    
+  def setTime(nameString, newTime):
+    gui.setTime(nameString, newTime)
+  
   gui.root.mainloop() #set it in motion
