@@ -576,6 +576,10 @@ class ViewTrace:
     """Returns the duration ending at the given time"""
     return find(lambda d: d.endViewTime == viewTime, self.durations)
     
+  def durationNamed(self, name):
+    """Returns the duration named name"""  
+    return find(lambda d: d.name == name, self.durations)
+    
 class Interface:
   """The class for the GUI interface"""
   
@@ -882,7 +886,15 @@ class Interface:
   def timeNamed(self, name):
     """Returns the time with the given name"""
     return find(lambda t: t.name == name, self.times)
-  
+    
+  def valueNamed(self, name):
+    """Returns the value with the given name"""
+    return find(lambda v: v.name == name, self.values)
+    
+  def traceNamed(self, name):
+    """Returns the trace with the given name"""
+    return find(lambda t: t.name == name, self.traces)
+    
 if __name__ == "__main__":
   gui = Interface() #make the interface
 
@@ -899,4 +911,15 @@ if __name__ == "__main__":
   def deleteTime(name):
     gui.deleteTime(name=name)
     
-  gui.root.mainloop() #set it in motion
+  def setDurationValue(traceName, durationName, valueName):
+    trace = gui.traceNamed(traceName)
+    duration = trace.durationNamed(durationName)
+    value = gui.valueNamed(valueName)
+    duration.setViewValue(value)
+    
+  def mergeValues(valueNameA, valueNameB):
+    valueA = gui.valueNamed(valueNameA)
+    valueB = gui.valueNamed(valueNameB)
+    valueB.merge(valueA)
+    
+  gui.root.mainloop() #set everything in motion
