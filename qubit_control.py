@@ -825,11 +825,9 @@ class Interface:
     for trace in self.traces: #there's a duration to remove in every trace
       trace.deleteTime(viewTime)
 
-    #it could be that there are values no longer in use now that we deleted some durations. If so, delete them.
+    #it could be that there are values no longer in use now that we deleted some durations. If so, remove them.
     valuesInUse = [d.assocViewValue for d in self.durations()]
-    for value in list(self.values): #can't loop over self.values since we might be deleting from it as we go; list(self.values) makes a copy of the list so that we can loop over that
-      if value not in valuesInUse:
-	self.values.remove(value)
+    self.values = filter(lambda v: v in valuesInUse, self.values) #values now only has values in use
 
     self.times.remove(viewTime) #get rid of the time	      
     self.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
