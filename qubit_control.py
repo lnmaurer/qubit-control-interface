@@ -1,6 +1,8 @@
 import Tkinter
 import ttk
+import tkMessageBox
 import labrad
+import sys
 
 
 """
@@ -55,8 +57,12 @@ class ViewTime:
     self.tkEntry = None
     self.tkCheck = None
   
-  def setValue(self, value):
-    """The value of a ViewTime is a time. It can only be set if it isn't locked."""
+  def setValue(self, value, errorIfImpossible=False):
+    """
+    The value of a ViewTime is a time. It can only be set if it isn't locked.
+    
+    If errorIfImpossible is set to True, the method will throw an error if it can't be set to the requested value.
+    """
     if (self.value != value) and (not self.locked):
       sortedTimes =  [t.value for t in self.interface.times]
       sortedTimes.sort()
@@ -79,7 +85,11 @@ class ViewTime:
 	#since times are on every trace, need to update all of them
 	self.interface.redrawAllCanvases()
 	self.interface.redrawAllXaxies()
-
+      elif errorIfImpossible: #can't be set to the requested time
+	pass #todo: throw an error
+    elif (self.value != value) and errorIfImpossible: #can't be set to the requested time because it's locked
+	pass #todo: throw an error
+	
     #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
     self.stringVar.set(str(self.value))
   
@@ -182,8 +192,12 @@ class ViewValue:
     self.tkEntry = None
     self.tkCheck = None
   
-  def setValue(self, value):
-    """The value of a ViewValue is a voltage. It can only be set if it isn't locked"""
+  def setValue(self, value, errorIfImpossible=False):
+    """
+    The value of a ViewValue is a voltage. It can only be set if it isn't locked
+        
+    If errorIfImpossible is set to True, the method will throw an error if it can't be set to the requested value.
+    """
     if (self.value != value) and (not self.locked):
       self.value = value
       self.stringVar.set(str(value))
@@ -192,6 +206,9 @@ class ViewValue:
       for trace in [t for t in self.interface.traces if self in t.values()]:
 	trace.redrawCanvas()
 	trace.redrawYaxis()
+	
+    elif (self.value != value) and errorIfImpossible: #can't be set to the requested time because it's locked
+	pass #todo: throw an error
 	
   def setName(self, name):
     """Sets the value's name and redraws the value frame. The name can only be changed if the value isn't locked."""
@@ -531,6 +548,10 @@ class ViewTrace:
     """Converts from canvas y coordinate to value"""
     return -self.maxValue()/self.interface.viewHeight * y + self.maxValue() 
     
+  def sortedDurations(self):
+    """Returns the durations, sorted from first to last"""
+    return sorted(self.durations, lambda d: d.startViewTime.value)
+    
 class Interface:
   """The class for the GUI interface"""
   
@@ -675,7 +696,11 @@ class Interface:
     ttk.Button(self.codeFrame, text='Test Code').grid(column=0, row=2, padx=5, pady=5)
     
     def runCode():
-      exec self.codeText.get('1.0', 'end') in globals()
+      try:
+	exec self.codeText.get('1.0', 'end') in globals()
+      except:
+	#todo: better message
+	tkMessageBox.showerror("Error", "{!s}\n{!s}\n{!s}".format(*sys.exc_info()))
       
     ttk.Button(self.codeFrame, text='Run Code', command=runCode).grid(column=1, row=2, padx=5, pady=5)
     ttk.Button(self.codeFrame, text='Load Code').grid(column=2, row=2, padx=5, pady=5)
@@ -778,7 +803,7 @@ class Interface:
     if value != None:
       value.setValue(newValue)
     else:
-      pass #todo: error handling
+      raise NameError("There is no value named {}.".format(nameString))
       
   def setTime(self, nameString, newTime):
     """Sets the time with name nameString to newTime"""
@@ -786,7 +811,7 @@ class Interface:
     if time != None:
       time.setValue(newTime)
     else:
-      pass #todo: error handling
+      raise NameError("There is no value named {}.".format(nameString))
   
 if __name__ == "__main__":
   gui = Interface() #make the interface
