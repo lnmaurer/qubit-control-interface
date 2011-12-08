@@ -514,8 +514,8 @@ class ViewTrace:
   def deleteTime(self, viewTime):
     #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
     #todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
-    firstDuration = find(lambda d: d.endViewTime == viewTime, self.durations)
-    secondDuration = find(lambda d: d.startViewTime == viewTime, self.durations)
+    firstDuration = self.durationEndingAt(viewTime)
+    secondDuration = self.durationStartingAt(viewTime)
     firstDuration.endViewTime = secondDuration.endViewTime #change first duration so that it covers bother durations
     self.durations.remove(secondDuration) #get rid of second duration
      
@@ -536,6 +536,14 @@ class ViewTrace:
   def sortedDurations(self):
     """Returns the durations, sorted from first to last"""
     return sorted(self.durations, lambda d: d.startViewTime.value)
+    
+  def durationStartingAt(self, viewTime):
+    """Returns the duration starting at the given ViewTime"""
+    return find(lambda d: d.startViewTime == viewTime, self.durations)
+    
+  def durationEndingAt(self, viewTime):
+    """Returns the duration ending at the given time"""
+    return find(lambda d: d.endViewTime == viewTime, self.durations)
     
 class Interface:
   """The class for the GUI interface"""
@@ -832,14 +840,24 @@ class Interface:
     self.times.remove(viewTime) #get rid of the time	      
     self.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
   
+  def timeNamed(self, name):
+    """Returns the time with the given name"""
+    return find(lambda t: t.name == name, self.times)
+  
 if __name__ == "__main__":
   gui = Interface() #make the interface
 
-  #next two functions will come in useful when evaluating code in code frame
+  #the following functions will come in useful when evaluating code in code frame
   def setValue(nameString, newValue):
     gui.setValue(nameString, newValue)
     
   def setTime(nameString, newTime):
     gui.setTime(nameString, newTime)
-  
+    
+  def addTime(name, time):
+    gui.addTime(name=name, time=time)
+    
+  def deleteTime(name):
+    gui.deleteTime(name=name)
+    
   gui.root.mainloop() #set it in motion
