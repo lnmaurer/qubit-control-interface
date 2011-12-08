@@ -158,22 +158,8 @@ class ViewTime:
       for canvas in iface.canvases():
 	canvas.bind('<B1-Motion>', self.dragMethod) #allow the line on the canvas to be dragged after it's clicked on
     elif (iface.mode == 'deleteTime') and not self.locked:
-      for trace in iface.traces: #there's a duration to remove in every trace
-	#plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
-	#todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
-	firstDuration = find(lambda d: d.endViewTime == self, trace.durations)
-	secondDuration = find(lambda d: d.startViewTime == self, trace.durations)
-	firstDuration.endViewTime = secondDuration.endViewTime #change first duration so that it covers bother durations
-	trace.durations.remove(secondDuration) #get rid of second duration
-      
-      iface.times.remove(self) #get rid of self
-    
-      #delete the associated value if there isn't another duration using that value
-      if secondDuration.assocViewValue not in [d.assocViewValue for d in iface.durations()]:
-	iface.values.remove(secondDuration.assocViewValue)
-	      
-      iface.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
-      iface.mode = 'select'
+      self.interface.deleteTime(viewTime=self)
+      iface.mode = 'select' #go back to select mode
   
 class ViewValue:
   """The class for a value drawn on the graph"""
@@ -524,7 +510,15 @@ class ViewTrace:
     self.durations.remove(toSplit) #remove the duration that's getting chopped by this
     self.durations.extend(toSplit.split(newTime)) #add the two new durations
     self.redrawCanvas() #we've added a new time, so have to redraw canvas
-      
+     
+  def deleteTime(self, viewTime):
+    #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
+    #todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
+    firstDuration = find(lambda d: d.endViewTime == viewTime, self.durations)
+    secondDuration = find(lambda d: d.startViewTime == viewTime, self.durations)
+    firstDuration.endViewTime = secondDuration.endViewTime #change first duration so that it covers bother durations
+    self.durations.remove(secondDuration) #get rid of second duration
+     
   def maxValue(self):
     """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
     rawvalues =  [d.assocViewValue.value for d in self.durations]
@@ -806,6 +800,7 @@ class Interface:
       raise NameError("There is no value named {}.".format(nameString))
     
   def addTime(self, name=None, time=None, eventObject=None):
+    """Adds a time, either given by a name and time, or by a click on the canvas and the name in the entry box. Then it updates the traces."""
     if eventObject != None: #then this addTime was in response to a click
       name = self.nameEntry.get()
       time = self.xToTime(eventObject.x)
@@ -822,8 +817,22 @@ class Interface:
     else: #there's already a time with that name
       pass #todo: throw an error
       
-  def deleteTime(self, name):
-    pass
+  def deleteTime(self, name=None, viewTime=None):
+    """Deletes the time given or named. Then it updates the traces."""
+    if viewTime == None: #lookup time by name
+      viewTime = find(lambda vt: vt.name==name, self.times)
+    
+    for trace in self.traces: #there's a duration to remove in every trace
+      trace.deleteTime(viewTime)
+
+    #it could be that there are values no longer in use now that we deleted some durations. If so, delete them.
+    valuesInUse = [d.assocViewValue for d in self.durations()]
+    for value in list(self.values): #can't loop over self.values since we might be deleting from it as we go; list(self.values) makes a copy of the list so that we can loop over that
+      if value not in valuesInUse:
+	self.values.remove(value)
+
+    self.times.remove(viewTime) #get rid of the time	      
+    self.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
   
 if __name__ == "__main__":
   gui = Interface() #make the interface
