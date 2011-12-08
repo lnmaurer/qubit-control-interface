@@ -95,9 +95,12 @@ class ViewTime:
   
   def setName(self, name):
     """Sets the time's name and redraws the value frame. The name can only be changed if the time isn't locked."""
-    if (self.name != name) and (not self.locked): #The first condition prevents needless refreshes if the name hasn't changed
-      self.name = name
-      self.interface.redrawValueFrame() #the description of any associated durations will have to be redrawn to reflect this time's new name
+    if (self.name != name): #prevents needless refresh if the name hasn't changed
+      if (not self.locked) and (name not in [t.name for t in self.interface.times]):
+	self.name = name
+	self.interface.redrawValueFrame() #the description of any associated durations will have to be redrawn to reflect this time's new name
+      else:
+	pass #todo: throw an error
   
   def disp(self, row):
     """Draws the widgets associated with this time in the value frame: a label with the name, an entry box with the value, and a checkbox for locking it."""
@@ -151,7 +154,7 @@ class ViewTime:
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
     iface = self.interface
-    if (iface.mode == 'rename') and (iface.nameEntry.get() not in [t.name for t in iface.times]):
+    if (iface.mode == 'rename'):
       self.setName(iface.nameEntry.get()) #set the name if we're in rename mode
       iface.mode = 'select'
     elif iface.mode == 'select':
@@ -198,10 +201,25 @@ class ViewValue:
 	
   def setName(self, name):
     """Sets the value's name and redraws the value frame. The name can only be changed if the value isn't locked."""
-    if (self.name != name) and (not self.locked): #The first condition prevents needless refreshes if the name hasn't changed
-      self.name = name
-      self.interface.redrawValueFrame() #the description of any associated durations will have to be redrawn to reflect this value's new name
+    if (self.name != name): #don't needlessly refresh if name hasn't changed
+      if (not self.locked) and (name not in [v.name for v in self.interface.values]):
+	self.name = name
+	self.interface.redrawValueFrame() #the description of any associated durations will have to be redrawn to reflect this value's new name
+      else:
+	pass #todo: throw error
+	
+  def merge(self, toMerge):
+    """If toMerge is a duration, it takes this for its value. If toMerge is a value, this value is replaced everywhere by toMerge"""
+    if isinstance(toMerge, ViewDuration):
+      toMerge.assocViewValue = self
+    else: #it's a ViewValue
+      for duration in self.interface.durations():
+	if duration.assocViewValue == self:
+	  duration.assocViewValue = toMerge
   
+    self.interface.removeUnusedValues() #could be unused values now
+    self.interface.refresh()
+    
   def disp(self, row):
     """Draws the widgets associated with this value in the value frame: a label with the name, an entry box with the value, and a checkbox for locking it."""
     self.row = row
@@ -255,21 +273,14 @@ class ViewValue:
     """Used when the line on the canvas is clicked"""
     iface = self.interface
     if iface.mode == 'rename':
-      #if this ViewValue is renamed to a name already in use, we merge this ViewValue with the ViewValue sharing its new name
-      newName = iface.nameEntry.get() #the new name
-      valueWithSameName = find(lambda v: v.name == newName, iface.values) #look for another value with this name
-			 #[v for v in iface.values if v.name == newName]
-      if valueWithSameName != None:
-	#if the named value does exist, we'll get rid of the current value and replace it everywhere with the named value	    
-	iface.values.remove(self) #get rid of the current value from the list
-	replacementValue = valueWithSameName
-	  
-	for dur in [d for d in iface.durations() if d.assocViewValue == self]:
-	  dur.assocViewValue = replacementValue
-      else: #no value uses that name
-	self.setName(newName) #if no value with this name already exists, merely change the name of self
-      iface.refresh() #number of values can change, and the duration section of the viewframe needs to be redrawn since this value's name has changed      
+      self.setName(iface.nameEntry.get())
       iface.mode = 'select'
+    if iface.mode == 'merge':
+      if iface.toMerge == None:
+	iface.toMerge = self
+      elif iface.toMerge != self: #it's easy to click on one line twice, so make sure we're not merging with self
+	self.merge(iface.toMerge)
+	iface.mode = 'select'
     elif iface.mode == 'select':
       for trace in iface.traces:
 	trace.canvas.bind('<B1-Motion>', lambda eventObj: self.dragMethod(eventObj, trace)) #allow the line on the canvas to be dragged after it's clicked on. Need to let it know which trace it's connected to since they have different y scales
@@ -293,9 +304,24 @@ class ViewDuration:
   
   def setName(self, name):
     """Sets the duration's name and redraws the value frame."""
-    if self.name != name:
-      self.name = name
-      self.redraw()  
+    if (self.name != name): #if the name isn't a change, don't do anything to avoid redrawing the screen
+      if (name not in [d.name for d in self.trace.durations]) and (not self.locked): #make sure no other duration for this trace is using the name 
+	self.name = name
+	self.redraw()
+      else:
+	pass #todo: throw error  
+  
+  def merge(self, toMerge):
+    """If toMerge is a duration, this takes its value. If toMerge is a value, this takes it for its value"""
+    if isinstance(toMerge, ViewDuration):
+      print "dur dur"
+      self.assocViewValue = toMerge.assocViewValue
+    else: #it's a ViewValue
+      print "val dur"
+      self.assocViewValue = toMerge
+      
+    self.interface.removeUnusedValues() #there could be unused values after the above
+    self.interface.refresh()
   
   def setStartViewTime(self, startViewTime):
     """Sets the start time of the duration to the given ViewTime"""
@@ -365,24 +391,29 @@ class ViewDuration:
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
     iface = self.interface
-    if not self.locked:
-      if (iface.mode == 'rename') and (iface.nameEntry.get() not in [d.name for d in iface.durations()]): #if we're in rename mode, and the new name isn't in use, then rename it
-	self.setName(iface.nameEntry.get())
+    if iface.mode == 'rename':
+      self.setName(iface.nameEntry.get())
+      iface.mode = 'select'
+    elif iface.mode == 'merge':
+      if iface.toMerge == None:
+	iface.toMerge = self
+      elif iface.toMerge != self: #it's easy to click on one line twice, so make sure we're not merging with self
+	self.merge(iface.toMerge)
 	iface.mode = 'select'
-      elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
-	if self.assocViewValue in [d.assocViewValue for d in iface.durations() if d != self] != 0:
-	  #more than one other duration uses this value
-	  #need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
-	  count = 1 #count holds the number we'll append to the end of the name
-	  while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
-	    count += 1
-	  newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked,iface)
-	  iface.values.append(newValue)
-	  self.assocViewValue = newValue
-	  iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
+    elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
+      if self.assocViewValue in [d.assocViewValue for d in iface.durations() if d != self] != 0:
+	#more than one other duration uses this value
+	#need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
+	count = 1 #count holds the number we'll append to the end of the name
+	while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
+	  count += 1
+	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked,iface)
+	iface.values.append(newValue)
+	self.assocViewValue = newValue
+	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
 	
-      #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
-      self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
+    #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
+    self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
 
 class ViewTrace:
   """Handles all the widgets for one trace and the durations that go with it"""
@@ -571,7 +602,7 @@ class Interface:
     self.noteBook.add(self.experimentTab, text='Experiment', state='disabled') #experiment tab starts out disabled; it's enabled after we connect to a server and set up traces
     
 #set some variables used by the GUI
-    self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', and 'rename'
+    self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', 'merge', and 'rename'
 
 #The setup tab
     #the manager address entry
@@ -644,15 +675,20 @@ class Interface:
       self.mode = 'deleteTime'
     ttk.Button(self.controlFrame, text='Delete Time', command=deleteTimeMode).grid(column=1, row=0, sticky='w', padx=5, pady=5)
 
+    def mergeMode():
+      self.mode = 'merge'
+      self.toMerge = None #need two things to merge; this holds the first one
+    ttk.Button(self.controlFrame, text='Merge', command=mergeMode).grid(column=2, row=0, sticky='w', padx=5, pady=5)    
+    
     def renameMode():
       self.mode = 'rename'
       self.nameEntry.focus_set() #move focus to nameEntry box when clicked
-    ttk.Button(self.controlFrame, text='Rename', command=renameMode).grid(column=2, row=0, sticky='w', padx=5, pady=5)
+    ttk.Button(self.controlFrame, text='Rename', command=renameMode).grid(column=3, row=0, sticky='w', padx=5, pady=5)
 
-    ttk.Label(self.controlFrame, text="Name:").grid(column=3, row=0, sticky='e', padx=5, pady=5)
+    ttk.Label(self.controlFrame, text="Name:").grid(column=4, row=0, sticky='e', padx=5, pady=5)
     
     self.nameEntry = ttk.Entry(self.controlFrame)
-    self.nameEntry.grid(column=4, row=0,sticky='w', padx=5, pady=5)
+    self.nameEntry.grid(column=5, row=0,sticky='w', padx=5, pady=5)
 
 #The view frame and canvas
     #print [int(i) for i in self.serverListbox.curselection()]
@@ -834,11 +870,14 @@ class Interface:
       trace.deleteTime(viewTime)
 
     #it could be that there are values no longer in use now that we deleted some durations. If so, remove them.
-    valuesInUse = [d.assocViewValue for d in self.durations()]
-    self.values = filter(lambda v: v in valuesInUse, self.values) #values now only has values in use
+    self.removeUnusedValues()
 
     self.times.remove(viewTime) #get rid of the time	      
     self.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
+  
+  def removeUnusedValues(self):
+    valuesInUse = [d.assocViewValue for d in self.durations()]
+    self.values = filter(lambda v: v in valuesInUse, self.values) #values now only has values in use
   
   def timeNamed(self, name):
     """Returns the time with the given name"""
