@@ -290,7 +290,7 @@ class ViewValue:
 
 class ViewDuration:
   """The class for a duration drawn on the graph"""
-  def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, trace, row=None):
+  def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, trace, row=None, locked=False):
     self.name = name
     self.startViewTime = startViewTime
     self.endViewTime = endViewTime
@@ -298,7 +298,7 @@ class ViewDuration:
     self.interface = interface
     self.trace = trace
     self.row = row
-    self.locked = False #when a duration is locked, it cannot be renamed or dragged, but the value and times it's attached to can still be changed
+    self.locked = locked #when a duration is locked, it cannot be renamed or dragged, but the value and times it's attached to can still be changed
    
     self.tkLabel = None
     self.tkCheck = None
@@ -358,7 +358,7 @@ class ViewDuration:
   
   def split(self, middleViewTime):
     """Returns the two durations that would result from splitting this duration in to two parts at the time given by middleViewTime"""
-    return [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface,self.trace), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface,self.trace)]
+    return [ViewDuration(self.name + ' part A',self.startViewTime,middleViewTime,self.assocViewValue,self.interface,self.trace, locked=self.locked), ViewDuration(self.name + ' part B',middleViewTime,self.endViewTime,self.assocViewValue,self.interface,self.trace,locked=self.locked)]
   
   def start(self):
     """Returns the time of the start time"""
@@ -433,8 +433,8 @@ class ViewTrace:
     self.canvas.bind("<Button-1>",  self.canvasClick)  
     
     #make it so that, after dragging an element has ceased, the binding is reset so that further dragging won't move the element unless it gets clicked again first
-    #we do this by binding to any motion on the canvas
-    self.canvas.bind("<Motion>", lambda e: self.canvas.bind("<B1-Motion>", lambda e: None))
+    #we do this by binding to any motion on any canvas
+    self.canvas.bind("<Motion>", self.interface.clearCanvasBindings)
     
     self.redrawCanvas()
     self.redrawXaxis()
@@ -513,27 +513,18 @@ class ViewTrace:
     """Returns a list of all values associated with durations drawn on this trace"""
     return [d.assocViewValue for d in self.durations]
 
-  def canvasClick(self, eventObj, clickedFirst = True):
-    """This is called when the canvas is clicked, or when a time was added to another canvas (in which case, it's called with clickedFirst=False)"""
-    mode = self.interface.mode
-    newName = self.interface.nameEntry.get()
-    newTime = None #will hold the new time if one needs to be made
-    if (mode == 'addTime'):
-      if newName not in [t.name for t in self.interface.times]: #the name isn't in interface yet; this was the inter
-	time = self.interface.xToTime(eventObj.x)
-	newTime = ViewTime(newName,time,False,self.interface)
-	self.interface.times.append(newTime) #add this new time to the list of times stored in the interface
-	self.interface.aCanvasWasClicked(eventObj,self) #tell the interface so the time can be added to others; this hanldes resetting the mode
-	self.interface.redrawValueFrame() #added a new time, so redraw the value frame
-      else: #the name was in the interface, so retrieve it
-	 newTime = find(lambda t: t.name == newName, self.interface.times)
-	
-      if newTime != None:
-	toSplit = find(lambda d: (d.start() < newTime.value) and (d.end() > newTime.value), self.durations)
-	self.durations.remove(toSplit) #remove the duration that's getting chopped by this
-	self.durations.extend(toSplit.split(newTime)) #add the two new durations
-	self.redrawCanvas() #we've added a new time, so have to redraw canvas
-	
+  def canvasClick(self, eventObj):
+    """This is called when the canvas is clicked"""
+    if (self.interface.mode == 'addTime'):
+      self.interface.addTime(eventObject=eventObj)
+
+  def addTime(self, newTime):
+    """Adds a new time to the canvas and adjust the durations to fit."""
+    toSplit = find(lambda d: (d.start() < newTime.value) and (d.end() > newTime.value), self.durations)
+    self.durations.remove(toSplit) #remove the duration that's getting chopped by this
+    self.durations.extend(toSplit.split(newTime)) #add the two new durations
+    self.redrawCanvas() #we've added a new time, so have to redraw canvas
+      
   def maxValue(self):
     """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
     rawvalues =  [d.assocViewValue.value for d in self.durations]
@@ -754,24 +745,25 @@ class Interface:
     self.redrawAllYaxies()
     self.redrawValueFrame()
     
-  def redrawAllCanvases(self):  
+  def clearCanvasBindings(self, eventObj):
+    """Clears the <B1-Motion> binding for all canvases"""
+    for canvas in [t.canvas for t in self.traces]:
+      canvas.bind("<B1-Motion>", lambda e: None)
+    
+  def redrawAllCanvases(self):
+    """Redraws all the canvases"""
     for trace in self.traces:
       trace.redrawCanvas()
       
   def redrawAllXaxies(self):
+    """Redraws all the x axies"""
     for trace in self.traces:
       trace.redrawXaxis() 
 
   def redrawAllYaxies(self):
+    """Redraws all the y axies"""
     for trace in self.traces:
       trace.redrawYaxis() 
-      
-  def aCanvasWasClicked(self, eventObj, clickedTrace):
-    """Call when a canvas was clicked; it updates all the other canvases"""
-    for trace in self.traces:
-      if trace != clickedTrace:
-	trace.canvasClick(eventObj,False) #update the other traces, but let them know they weren't the first clicked
-    self.mode = 'select' #put back in select mode after the time has been added
 
   def durations(self):
     """Returns a list of all the durations in all the traces"""
@@ -812,6 +804,26 @@ class Interface:
       time.setValue(newTime)
     else:
       raise NameError("There is no value named {}.".format(nameString))
+    
+  def addTime(self, name=None, time=None, eventObject=None):
+    if eventObject != None: #then this addTime was in response to a click
+      name = self.nameEntry.get()
+      time = self.xToTime(eventObject.x)
+      self.mode = 'select' #go back to select mode
+    
+    if name not in [t.name for t in self.times]: #there aren't any other times with this name
+      newTime = ViewTime(name,time,False,self)
+      self.times.append(newTime) #add this new time to the list of times
+      
+      for trace in self.traces:
+	trace.addTime(newTime)
+      
+      self.redrawValueFrame() #added a new time (and thus new durations), so redraw the value frame
+    else: #there's already a time with that name
+      pass #todo: throw an error
+      
+  def deleteTime(self, name):
+    pass
   
 if __name__ == "__main__":
   gui = Interface() #make the interface
