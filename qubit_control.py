@@ -67,7 +67,7 @@ class ViewTime:
       sortedTimes =  [t.value for t in self.interface.times]
       sortedTimes.sort()
       index = sortedTimes.index(self.value)
-      #find the limits for what this time can be set to
+      #find the limits for what this time can be set to. maxTime is the largest time it can be and minTime is the smallest time it can be
       if index == 0: #in this case, self is the smallest time
 	minTime = None
 	maxTime = sortedTimes[index+1]
@@ -158,8 +158,7 @@ class ViewTime:
       self.setName(iface.nameEntry.get()) #set the name if we're in rename mode
       iface.mode = 'select'
     elif iface.mode == 'select':
-      for canvas in iface.canvases():
-	canvas.bind('<B1-Motion>', self.dragMethod) #allow the line on the canvas to be dragged after it's clicked on
+      iface.bindCanvasesDrag(self.dragMethod) #allow the line on the canvas to be dragged after it's clicked on
     elif (iface.mode == 'deleteTime') and not self.locked:
       self.interface.deleteTime(viewTime=self)
       iface.mode = 'select' #go back to select mode
@@ -314,10 +313,8 @@ class ViewDuration:
   def merge(self, toMerge):
     """If toMerge is a duration, this takes its value. If toMerge is a value, this takes it for its value"""
     if isinstance(toMerge, ViewDuration):
-      print "dur dur"
       self.assocViewValue = toMerge.assocViewValue
     else: #it's a ViewValue
-      print "val dur"
       self.assocViewValue = toMerge
       
     self.interface.removeUnusedValues() #there could be unused values after the above
@@ -412,8 +409,8 @@ class ViewDuration:
 	self.assocViewValue = newValue
 	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
 	
-    #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
-    self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
+	#the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
+	self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
 
 class ViewTrace:
   """Handles all the widgets for one trace and the durations that go with it"""
@@ -465,7 +462,7 @@ class ViewTrace:
     
     #next, draw all the ViewTimes
     for time in self.interface.times:
-      if (time.name != 'Start') and (time.name != 'Stop'): #don't display anything for start or stop times; that way they can't be edited through the canvas
+      if (time.name != 'start') and (time.name != 'end'): #don't display anything for start or stop times; that way they can't be edited through the canvas
 	lineID = self.canvas.create_line(self.timeToX(time.value), 0, self.timeToX(time.value), self.viewHeight, width=2, dash='.') #draw the line
 	self.canvas.tag_bind(lineID, "<Button-1>",  time.clickMethod) #bind the line to it's clickMethod so that it can be interacted with
 
@@ -660,8 +657,8 @@ class Interface:
   def populateExperimentTab(self):
     """Populates the experiment tab with widgets; call after deciding what servers we want traces for"""
 
-    self.start = ViewTime('Start',0.0,True,self)
-    self.end = ViewTime('Stop',1000.0,True,self)
+    self.start = ViewTime('start',0.0,True,self)
+    self.end = ViewTime('end',1000.0,True,self)
     initialValue = ViewValue('Initial',1,False,self)
     self.times = [self.start, self.end]
     self.values = [initialValue]
@@ -818,6 +815,11 @@ class Interface:
     """Returns a list of all canvases"""
     return [t.canvas for t in self.traces]
     
+  def bindCanvasesDrag(self, method):
+    """Binds all canvases' <B1-Motion> (left mouse drag) to the given method."""
+    for canvas in self.canvases():
+      canvas.bind('<B1-Motion>', method)
+    
   #all traces have the same x axis, so we can keep these functions in the interface
   def maxTime(self):
     """Returns the time of the largest ViewTime"""
@@ -833,26 +835,24 @@ class Interface:
   
   def setValue(self, nameString, newValue):
     """Sets the value with name nameString to newValue"""
-    value = find(lambda v: v.name == nameString, self.values)
-    if value != None:
-      value.setValue(newValue)
-    else:
-      raise NameError("There is no value named {}.".format(nameString))
+    self.valueNamed(nameString).setValue(newValue, True)
       
   def setTime(self, nameString, newTime):
     """Sets the time with name nameString to newTime"""
-    time = find(lambda t: t.name == nameString, self.times)
-    if time != None:
-      time.setValue(newTime)
-    else:
-      raise NameError("There is no value named {}.".format(nameString))
-    
+    self.timeNamed(nameString).setValue(newTime, True)
+      
   def addTime(self, name=None, time=None, eventObject=None):
     """Adds a time, either given by a name and time, or by a click on the canvas and the name in the entry box. Then it updates the traces."""
     if eventObject != None: #then this addTime was in response to a click
       name = self.nameEntry.get()
       time = self.xToTime(eventObject.x)
       self.mode = 'select' #go back to select mode
+    
+    #todo: throw error if before start of after end
+    if time <= self.start.value:
+      pass
+    if time >= self.end.value:
+      pass
     
     if name not in [t.name for t in self.times]: #there aren't any other times with this name
       newTime = ViewTime(name,time,False,self)
@@ -869,6 +869,12 @@ class Interface:
     """Deletes the time given or named. Then it updates the traces."""
     if viewTime == None: #lookup time by name
       viewTime = find(lambda vt: vt.name==name, self.times)
+      
+    #todo: throw error if trying to delete start or end
+    if viewTime == self.start:
+      pass
+    elif viewTime == self.end:
+      pass
     
     for trace in self.traces: #there's a duration to remove in every trace
       trace.deleteTime(viewTime)
@@ -880,21 +886,35 @@ class Interface:
     self.refresh() #need to refresh since we've updated the value frame, and the canvas may need updating if the unless statement ran
   
   def removeUnusedValues(self):
+    """Removes all the values that aren't used in at least one duration."""
     valuesInUse = [d.assocViewValue for d in self.durations()]
     self.values = filter(lambda v: v in valuesInUse, self.values) #values now only has values in use
   
   def timeNamed(self, name):
     """Returns the time with the given name"""
-    return find(lambda t: t.name == name, self.times)
+    time = find(lambda t: t.name == name, self.times)
+    if time == None:
+      raise NameError("There is no time named {}.".format(name))
+    else:
+      return time
     
   def valueNamed(self, name):
     """Returns the value with the given name"""
-    return find(lambda v: v.name == name, self.values)
+    value = find(lambda v: v.name == name, self.values)
+    if time == None:
+      raise NameError("There is no value named {}.".format(name))
+    else:
+      return value
     
   def traceNamed(self, name):
     """Returns the trace with the given name"""
-    return find(lambda t: t.name == name, self.traces)
-    
+    trace = find(lambda t: t.name == name, self.traces)
+    if trace == None:
+      raise NameError("There is no teace named {}.".format(name))
+    else:
+      return trace
+      
+      
 if __name__ == "__main__":
   gui = Interface() #make the interface
 
@@ -921,5 +941,10 @@ if __name__ == "__main__":
     valueA = gui.valueNamed(valueNameA)
     valueB = gui.valueNamed(valueNameB)
     valueB.merge(valueA)
+    
+  def setDurationName(traceName, startTimeName, newDurationName):
+    trace = gui.traceNamed(traceName)
+    time = gui.timeNamed(startTimeName)
+    trace.durationStartingAt(time).setName(newDurationName)
     
   gui.root.mainloop() #set everything in motion
