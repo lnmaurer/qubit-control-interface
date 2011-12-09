@@ -600,6 +600,28 @@ class Interface:
     self.root = Tkinter.Tk()
     self.root.title('Qubit Control')
     
+#The menubar and menus
+    def donothing():
+      pass
+    
+    menubar = Tkinter.Menu(self.root)
+    
+    #the file menu
+    self.filemenu = Tkinter.Menu(menubar, tearoff=0)
+    self.filemenu.add_command(label="Save Experiment", state='disabled', command=self.saveExperiment)
+    self.filemenu.add_command(label="Load Experiment", state='disabled', command=self.loadExperiment)
+    self.filemenu.add_separator()
+    self.filemenu.add_command(label="Exit", accelerator="Ctrl+Q", command=self.root.quit) #todo: make key binding work
+    menubar.add_cascade(label="File", menu=self.filemenu)
+    
+    #the edit menu
+    editmenu = Tkinter.Menu(menubar, tearoff=0)
+    editmenu.add_command(label="Cut", accelerator="Ctrl+X", command=donothing) #todo: make it work
+    editmenu.add_command(label="Copy", accelerator="Ctrl+C", command=donothing) #todo: make it work
+    editmenu.add_command(label="Paste", accelerator="Ctrl+V", command=donothing) #todo: make it work
+    menubar.add_cascade(label="Edit", menu=editmenu)
+    
+    self.root.config(menu=menubar)
 #the notebook has two pages, one for setup and one for the experiment
     self.noteBook = ttk.Notebook(self.root)
     self.noteBook.pack()
@@ -666,6 +688,11 @@ class Interface:
   def populateExperimentTab(self):
     """Populates the experiment tab with widgets; call after deciding what servers we want traces for"""
 
+#enable experiment loading and saving
+    self.filemenu.entryconfigure('Save Experiment', state="normal")    
+    self.filemenu.entryconfigure('Load Experiment', state="normal")    
+    
+#initial conditions for the traces
     self.start = ViewTime('start',0.0,True,self)
     self.end = ViewTime('end',1000.0,True,self)
     initialValue = ViewValue('Initial',1,False,self)
@@ -879,10 +906,12 @@ class Interface:
     if viewTime == None: #lookup time by name
       viewTime = find(lambda vt: vt.name==name, self.times)
       
-    #todo: throw error if trying to delete start or end
+    #todo: throw error if trying to delete start, end, or a locked time
     if viewTime == self.start:
       pass
     elif viewTime == self.end:
+      pass
+    elif viewTime.locked:
       pass
     
     for trace in self.traces: #there's a duration to remove in every trace
@@ -922,6 +951,12 @@ class Interface:
       raise NameError("There is no teace named {}.".format(name))
     else:
       return trace
+      
+  def loadExperiment(self):
+    pass
+  
+  def saveExperiment(self):
+    pass
       
       
 if __name__ == "__main__":
