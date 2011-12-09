@@ -601,9 +601,6 @@ class Interface:
     self.root.title('Qubit Control')
     
 #The menubar and menus
-    def donothing():
-      pass
-    
     menubar = Tkinter.Menu(self.root)
     
     #the file menu
@@ -612,13 +609,14 @@ class Interface:
     self.filemenu.add_command(label="Load Experiment", state='disabled', command=self.loadExperiment)
     self.filemenu.add_separator()
     self.filemenu.add_command(label="Exit", accelerator="Ctrl+Q", command=self.root.quit) #todo: make key binding work
+    self.root.bind_all('<Control-q>', lambda arg: self.root.quit()) #control-q now quits
     menubar.add_cascade(label="File", menu=self.filemenu)
     
     #the edit menu
     editmenu = Tkinter.Menu(menubar, tearoff=0)
-    editmenu.add_command(label="Cut", accelerator="Ctrl+X", command=donothing) #todo: make it work
-    editmenu.add_command(label="Copy", accelerator="Ctrl+C", command=donothing) #todo: make it work
-    editmenu.add_command(label="Paste", accelerator="Ctrl+V", command=donothing) #todo: make it work
+    editmenu.add_command(label="Cut", accelerator="Ctrl+X", command=lambda: self.noteBook.event_generate('<Control-x>')) #todo: make it work
+    editmenu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self.noteBook.event_generate('<Control-c>')) #todo: make it work
+    editmenu.add_command(label="Paste", accelerator="Ctrl+V", command=lambda: self.noteBook.event_generate('<Control-v>')) #todo: make it work
     menubar.add_cascade(label="Edit", menu=editmenu)
     
     self.root.config(menu=menubar)
