@@ -41,7 +41,7 @@ def find(f, seq):
       return item
 
 class ViewTime:
-  """The class for a time drawn on the graph"""
+  """The class for a time drawn on the trace"""
   def __init__(self, name, value, locked, interface, row=None):
     self.name = name
     self.value = value
@@ -68,9 +68,11 @@ class ViewTime:
       sortedTimes.sort()
       index = sortedTimes.index(self.value)
       #find the limits for what this time can be set to. maxTime is the largest time it can be and minTime is the smallest time it can be
-      if index == 0: #in this case, self is the smallest time
-	minTime = None
-	maxTime = sortedTimes[index+1]
+      if index == 0: #in this case, self is the smallest time, don't let it move
+	if errorIfImpossible:
+	  pass #todo: raise error
+	else:
+	  maxTime = minTime = 0
       elif index == (len(sortedTimes)-1): #in this case, self is the largest time
 	minTime = sortedTimes[index-1]
 	maxTime = None
@@ -79,7 +81,6 @@ class ViewTime:
 	maxTime = sortedTimes[index+1]
 	
       if ((maxTime == None) and (value > minTime)) \
-	or ((minTime == None) and (value < maxTime)) \
 	or ((maxTime != None) and (minTime != None) and (value > minTime) and (value < maxTime)):
 	self.value = value
 	#since times are on every trace, need to update all of them
@@ -164,7 +165,7 @@ class ViewTime:
       iface.mode = 'select' #go back to select mode
   
 class ViewValue:
-  """The class for a value drawn on the graph"""
+  """The class for a value drawn on the trace"""
   def __init__(self,name, value, locked, interface, row=None):
     self.name = name
     self.value = value
@@ -187,16 +188,20 @@ class ViewValue:
     If errorIfImpossible is set to True, the method will throw an error if it can't be set to the requested value.
     """
     if (self.value != value) and (not self.locked):
-      self.value = value
-      self.stringVar.set(str(value))
+      if value >= 0: #don't allow negative values
+	self.value = value
       
-      #update all the traces which have this value
-      for trace in [t for t in self.interface.traces if self in t.values()]:
-	trace.redrawCanvas()
-	trace.redrawYaxis()
-	
+	#update all the traces which have this value
+	for trace in [t for t in self.interface.traces if self in t.values()]:
+	  trace.redrawCanvas()
+	  trace.redrawYaxis()
+      else:
+	pass #todo: value < 0 so raise error
     elif (self.value != value) and errorIfImpossible: #can't be set to the requested time because it's locked
 	pass #todo: throw an error
+	
+    #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
+    self.stringVar.set(str(value))
 	
   def setName(self, name):
     """Sets the value's name and redraws the value frame. The name can only be changed if the value isn't locked."""
@@ -285,7 +290,7 @@ class ViewValue:
 	trace.canvas.bind('<B1-Motion>', lambda eventObj: self.dragMethod(eventObj, trace)) #allow the line on the canvas to be dragged after it's clicked on. Need to let it know which trace it's connected to since they have different y scales
 
 class ViewDuration:
-  """The class for a duration drawn on the graph"""
+  """The class for a duration drawn on the trace"""
   def __init__(self, name, startViewTime, endViewTime, assocViewValue, interface, trace, row=None, locked=False):
     self.name = name
     self.startViewTime = startViewTime
@@ -551,7 +556,11 @@ class ViewTrace:
     """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
     rawvalues =  [d.assocViewValue.value for d in self.durations]
     rawvalues.sort()
-    return 1.25*rawvalues[-1] #return 1.25 times the largest value
+    maxValue = rawvalues[-1]
+    if maxValue == 0:
+      return 1.0 #returning zero would result in divide by zero errors later
+    else:
+      return 1.25*maxValue #return 1.25 times the largest value
   
   def valueToY(self, value):
     """Converts from value to canvas y coordinate"""
