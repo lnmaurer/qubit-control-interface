@@ -2,6 +2,7 @@ import Tkinter
 import ttk
 import tkMessageBox
 import labrad
+from twisted.internet.error import ConnectionRefusedError
 import sys
 
 
@@ -655,14 +656,16 @@ class Interface:
     
     #button to connect to manager
     def connectToManager():
-      #todo: error handling for when the following doesn't work
-      self.labRADconnection = labrad.connect(self.managerAddress.get(),
-					     port=int(self.managerPort.get()),
-					     password=self.managerPassword.get())
-      self.serverListbox.delete(0, Tkinter.END) #if the listbox is already populated, clear it, this is unnescessary at present
-      for serverName in str(self.labRADconnection.servers).rsplit("\n"):
-	self.serverListbox.insert(Tkinter.END, serverName) #add all the server names to the listbox
-	
+      try:
+	self.labRADconnection = labrad.connect(self.managerAddress.get(),
+					      port=int(self.managerPort.get()),
+					      password=self.managerPassword.get())
+      except ConnectionRefusedError as (err):
+	tkMessageBox.showerror("Connection Error", err)
+      else:
+	self.serverListbox.delete(0, Tkinter.END) #if the listbox is already populated, clear it, this is unnescessary at present
+	for serverName in str(self.labRADconnection.servers).rsplit("\n"):
+	  self.serverListbox.insert(Tkinter.END, serverName) #add all the server names to the listbox
       
     ttk.Button(self.setupTab, text='Connect', command=connectToManager).grid(column=1, row=3,sticky='nsew', padx=5, pady=5)
 
