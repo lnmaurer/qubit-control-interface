@@ -10,14 +10,13 @@ import sys
 Design overview: The GUI is broken in to two tabs. The setup tab handles LabRAD configuration and
 the experiment tab handles the setup of the experiment.
 
-The experiment tab has three frames:
+The experiment tab has four frames:
 1) The view frame, which has subframes for each trace (a canvas and labels for its axies). Three
 things are drawn on each canvas: times, values, and durations. More on these later.
 2) The value frame which shows the values associated with the things drawn on the canvas.
 3) The control frame, which has buttons that control the effect of clikcing on the canvas (e.g.
 allows you to add a new time by clicking on the canvas).
-
-I'll be adding another frame for text based programming.
+4) The code frame is for entering the code that completely describes the experiment.
 
 To handle all this, there are 5 classes. One is for the interface. One is for traces. The other
 three are for the times, values, and durations mentioned earlier. A ViewTime keeps track of an x
@@ -31,6 +30,9 @@ Each trace shows every time, its own durations, and every value that goes with i
 All times and values are stored in the interface, but each trace has its own set of durations.
 Because every trace has every time, and adding times break durations in two, at the moment all
 traces have durations with the same start and stop values. I may change that at a later point.
+
+I've also made several functions for use in the code frame. You can see them defined at the very
+bottom, in the 'if __name__ == "__main__"' statement.
 """
 
 #how on earth does python not have this? Can kind of do it with filter or Comprehensions, but ugly
@@ -660,9 +662,9 @@ class Interface:
 	self.labRADconnection = labrad.connect(self.managerAddress.get(),
 					      port=int(self.managerPort.get()),
 					      password=self.managerPassword.get())
-      except ConnectionRefusedError as (err):
+      except ConnectionRefusedError as (err): #this error gets raised if we can't connect
 	tkMessageBox.showerror("Connection Error", err)
-      else:
+      else: #no error, so show what servers are connected
 	self.serverListbox.delete(0, Tkinter.END) #if the listbox is already populated, clear it, this is unnescessary at present
 	for serverName in str(self.labRADconnection.servers).rsplit("\n"):
 	  self.serverListbox.insert(Tkinter.END, serverName) #add all the server names to the listbox
