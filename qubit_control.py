@@ -417,8 +417,8 @@ class ViewDuration:
 	self.assocViewValue = newValue
 	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
 	
-	#the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
-	self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
+      #the folllwing proc and binding allows the duration's value to be changed. We need to bind to the canvas. Binding to the duration's line alone doesn't cut it; the mouse will move off the line before the refresh and it'll stop working.
+      self.trace.canvas.bind('<B1-Motion>', self.dragMethod) #bind the proc to change the value to the canvas
 
 class ViewTrace:
   """Handles all the widgets for one trace and the durations that go with it"""
@@ -499,7 +499,7 @@ class ViewTrace:
       tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
       self.xAxisLables.append(tmp)
     
-      tmp = ttk.Label(self.viewFrame, text='Time (UNITS???)')
+      tmp = ttk.Label(self.viewFrame, text='Time (ns)')
       tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
       self.xAxisLables.append(tmp)
     
