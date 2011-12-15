@@ -4,7 +4,7 @@ import tkMessageBox
 import labrad
 from twisted.internet.error import ConnectionRefusedError
 import sys
-
+from math import * #so we can use sin, cos, etc
 
 """
 Design overview: The GUI is broken in to two tabs. The setup tab handles LabRAD configuration and
@@ -47,13 +47,13 @@ class ViewTime:
   """The class for a time drawn on the trace"""
   def __init__(self, name, value, locked, interface, row=None):
     self.name = name
-    self.value = value
+    self.value = int(round(value)) #only allow integer values
     self.locked = locked
     self.interface = interface
     self.row = row
     
     self.stringVar = Tkinter.StringVar()
-    self.stringVar.set(str(value))
+    self.stringVar.set(str(self.value))
     self.intVar = Tkinter.IntVar()
     self.intVar.set(1 if self.locked else 0)
     self.tkLabel = None
@@ -85,7 +85,7 @@ class ViewTime:
 	
       if ((maxTime == None) and (value > minTime)) \
 	or ((maxTime != None) and (minTime != None) and (value > minTime) and (value < maxTime)):
-	self.value = value
+	self.value = int(round(value)) #can only take integer values
 	#since times are on every trace, need to update all of them
 	self.interface.redrawAllCanvases()
 	self.interface.redrawAllXaxies()
@@ -129,7 +129,7 @@ class ViewTime:
     self.interface.valueFrameParts.append(self.tkEntry)
     
     self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
-
+    
     #this method updates the value if it's changed in the entry box
     def entryMethod(eventObj):
       if self.tkEntry.get() != '':
@@ -169,12 +169,14 @@ class ViewTime:
   
 class ViewValue:
   """The class for a value drawn on the trace"""
-  def __init__(self,name, value, locked, interface, row=None):
+  def __init__(self,name, value, locked, interface, function = lambda t: 1, row=None):
     self.name = name
     self.value = value
     self.locked = locked
     self.interface = interface
     self.row = row
+    
+    self.function = function
     
     self.stringVar = Tkinter.StringVar()
     self.stringVar.set(str(value))
@@ -183,6 +185,15 @@ class ViewValue:
     self.tkLabel = None
     self.tkEntry = None
     self.tkCheck = None
+    
+  def setFunction(self, string):
+    """Sets self.function using the given string. The string should be a function of t (e.g. 'sin(t)'). Note that the value at a given time is the function multipled by self.value"""
+    #todo: find way to do this without importing math every time
+    exec "from math import *\n" + "self.function = lambda t: " + string in locals()
+    
+  def values(self, times):
+    """Returns the value this ViewValue takes at the given times. The value this takes at a given time is self.value*self.function(time)"""
+    return [self.value*self.function(t) for t in times]
   
   def setValue(self, value, errorIfImpossible=False):
     """
@@ -308,7 +319,11 @@ class ViewDuration:
     self.tkCheck = None
     self.intVar = Tkinter.IntVar()
     self.intVar.set(0)
-  
+
+  def values(self):
+      """Returns the values this takes at 1ns values from startTime to endTime"""
+      return self.assocViewValue.values(range(self.startViewTime.value, self.endViewTime.value))    
+    
   def setName(self, name):
     """Sets the duration's name and redraws the value frame."""
     if (self.name != name): #if the name isn't a change, don't do anything to avoid redrawing the screen
@@ -447,7 +462,7 @@ class ViewTrace:
     self.end = self.interface.end    
     
     #creat a duration with the initial value
-    self.durations = [ViewDuration('Initial', self.start, self.end, initialValue, self.interface, self)]
+    self.durations = [ViewDuration('initial', self.start, self.end, initialValue, self.interface, self)]
     
     self.canvas = Tkinter.Canvas(self.viewFrame, width=self.interface.viewWidth, height=self.interface.viewHeight) #todo: make array so that we can have more than one view
     self.canvas.grid(column=1, row=0, columnspan=3, rowspan=3, sticky='nsew', padx=5, pady=5)
@@ -698,7 +713,7 @@ class Interface:
 #initial conditions for the traces
     self.start = ViewTime('start',0.0,True,self)
     self.end = ViewTime('end',1000.0,True,self)
-    initialValue = ViewValue('Initial',1,False,self)
+    initialValue = ViewValue('initial',1,False,self)
     self.times = [self.start, self.end]
     self.values = [initialValue]
     
@@ -942,7 +957,7 @@ class Interface:
   def valueNamed(self, name):
     """Returns the value with the given name"""
     value = find(lambda v: v.name == name, self.values)
-    if time == None:
+    if value == None:
       raise NameError("There is no value named {}.".format(name))
     else:
       return value
@@ -951,7 +966,7 @@ class Interface:
     """Returns the trace with the given name"""
     trace = find(lambda t: t.name == name, self.traces)
     if trace == None:
-      raise NameError("There is no teace named {}.".format(name))
+      raise NameError("There is no trace named {}.".format(name))
     else:
       return trace
       
@@ -1000,5 +1015,8 @@ if __name__ == "__main__":
     trace = gui.traceNamed(traceName)
     time = gui.timeNamed(startTimeName)
     trace.durationStartingAt(time).setName(newDurationName)
+    
+  def setValueFunction(nameString, functionString):
+    gui.valueNamed(nameString).setFunction(functionString)
     
   gui.root.mainloop() #set everything in motion
