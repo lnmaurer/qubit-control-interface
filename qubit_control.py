@@ -552,11 +552,8 @@ class ViewTrace:
 	self.canvas.tag_bind(lineID, "<Button-1>",  value.clickMethod)
       else:
 	times = self.interface.timeArray() #all times from start to end
-	coords = zip(times, value.values(times))
-	for coordpair in zip(coords[:-1],coords[1:]):
-	  first = coordpair[0]
-	  second = coordpair[1]
-	  self.canvas.create_line(self.timeToX(first[0]), self.valueToY(first[1]), self.timeToX(second[0]), self.valueToY(second[1]), width=1, fill='blue', dash='.')
+	coords = zip([self.timeToX(t) for t in times], [self.valueToY(v) for v in value.values(times)])
+	self.canvas.create_line(*coords, width=1, fill='blue', dash='.')
  
     #next, draw all the ViewDurations. Because this comes after ViewValues, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
     for dur in self.durations:
@@ -564,11 +561,8 @@ class ViewTrace:
 	lineID = self.canvas.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
 	self.canvas.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
       else:
-	coords = zip(dur.times(), dur.values())
-	for coordpair in zip(coords[:-1],coords[1:]):
-	  first = coordpair[0]
-	  second = coordpair[1]
-	  self.canvas.create_line(self.timeToX(first[0]), self.valueToY(first[1]), self.timeToX(second[0]), self.valueToY(second[1]), width=2, fill='red')
+	coords = zip([self.timeToX(t) for t in dur.times()], [self.valueToY(v) for v in dur.values()])
+	self.canvas.create_line(*coords, width=2, fill='red')
 
     #finially, draw all the ViewTimes; this mean's they're drawn over everything
     for time in self.interface.times:
