@@ -169,7 +169,7 @@ class ViewTime:
   
 class ViewValue:
   """The class for a value drawn on the trace"""
-  def __init__(self, name, value, locked, interface, function=None, mode="constant", row=None):
+  def __init__(self, name, value, locked, interface, functionText='1.0', mode="constant", row=None):
     self.name = name
     self.locked = locked
     self.interface = interface
@@ -178,11 +178,15 @@ class ViewValue:
     #can either be in constant mode -- which allows GUI dragging -- or in function mode, which allows more complicated values but doesn't allow dragging
     self.mode = mode
     self.value = value
-    self.function = function
+    self.functionText = functionText
+    exec "from math import *\n" + "self.function = lambda t: " + functionText in locals()
     
     
     self.stringVar = Tkinter.StringVar()
-    self.stringVar.set(str(value))
+    if self.mode == 'constant':
+      self.stringVar.set(str(value))
+    else:
+      self.stringVar.set(functionText)
     self.intVar = Tkinter.IntVar()
     self.intVar.set(1 if self.locked else 0)
     self.tkLabel = None
@@ -192,11 +196,15 @@ class ViewValue:
     
   def setFunction(self, string):
     """Sets self.function using the given string. The string should be a function of t (e.g. 'sin(t)'). Note that the value at a given time is the function multipled by self.value"""
-    #todo: find way to do this without importing math every time
-    exec "from math import *\n" + "self.function = lambda t: " + string in locals()
+    if not self.locked:
+      self.functionText = string
+      #todo: find way to do this without importing math every time
+      exec "from math import *\n" + "self.function = lambda t: " + string in locals()
 
-    #update all the traces which have this value
-    self.updateTraces()
+      #update all the traces which have this value
+      self.updateTraces()
+    else:
+      pass #todo: throw error
     
   def values(self, times):
     """Returns the value this ViewValue takes at the given times. The value this takes at a given time is self.value*self.function(time)"""
@@ -307,14 +315,13 @@ class ViewValue:
     #the menubutton slects whether this ViewValue takes a constant or a function
     def setConstant():
       self.mode = 'constant'
+      self.stringVar.set(str(self.value))
       self.updateTraces()
     
     def setFunction():
       self.mode = 'function'
-      if self.function == None:
-	self.setFunction(str(self.tkEntry.get()))
-      else:
-	self.updateTraces()
+      self.stringVar.set(str(self.functionText))
+      self.updateTraces()
       
     
     self.tkMenubutton = ttk.Menubutton(self.interface.valueFrame, text="Type")
@@ -471,20 +478,27 @@ class ViewDuration:
     if iface.mode == 'rename':
       self.setName(iface.nameEntry.get())
       iface.mode = 'select'
+    elif iface.mode == 'newValue':
+      if iface.nameEntry.get() not in [v.name for v in iface.values]:
+	newValue = ViewValue(iface.nameEntry.get(), self.assocViewValue.value, self.assocViewValue.locked, iface, functionText=self.assocViewValue.functionText, mode=self.assocViewValue.mode)
+	iface.values.append(newValue)
+	self.assocViewValue = newValue
+	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch    
+	iface.mode = 'select'
     elif iface.mode == 'merge':
       if iface.toMerge == None:
 	iface.toMerge = self
       elif iface.toMerge != self: #it's easy to click on one line twice, so make sure we're not merging with self
 	self.merge(iface.toMerge)
 	iface.mode = 'select'
-    elif iface.mode == 'select': #if we're in select mode, then prepare to move the duration
+    elif (iface.mode == 'select') and (self.assocViewValue.mode == 'constant'): #if we're in select mode, and the value can be dragged prepare to move the duration
       if self.assocViewValue in [d.assocViewValue for d in iface.durations() if d != self] != 0:
 	#more than one other duration uses this value
 	#need to make a new value and come up with a unique name for it; we'll take the name and stick a number on the end. First, find a number that will give a unique name
 	count = 1 #count holds the number we'll append to the end of the name
 	while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
 	  count += 1
-	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked, iface, function=self.assocViewValue.function, mode=self.assocViewValue.mode)
+	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked, iface, functionText=self.assocViewValue.functionText, mode=self.assocViewValue.mode)
 	iface.values.append(newValue)
 	self.assocViewValue = newValue
 	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
@@ -549,20 +563,20 @@ class ViewTrace:
       if value.mode == 'constant':
 	y = self.valueToY(value.maxValue())
 	lineID = self.canvas.create_line(0, y, self.viewWidth, y, width=1, fill='blue', dash='.')
-	self.canvas.tag_bind(lineID, "<Button-1>",  value.clickMethod)
       else:
 	times = self.interface.timeArray() #all times from start to end
 	coords = zip([self.timeToX(t) for t in times], [self.valueToY(v) for v in value.values(times)])
-	self.canvas.create_line(*coords, width=1, fill='blue', dash='.')
+	lineID = self.canvas.create_line(*coords, width=1, fill='green', dash='.') #draw ViewValues with functions in green
+      self.canvas.tag_bind(lineID, "<Button-1>",  value.clickMethod)
  
     #next, draw all the ViewDurations. Because this comes after ViewValues, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
     for dur in self.durations:
       if dur.assocViewValue.mode == 'constant':
 	lineID = self.canvas.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
-	self.canvas.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
       else:
 	coords = zip([self.timeToX(t) for t in dur.times()], [self.valueToY(v) for v in dur.values()])
-	self.canvas.create_line(*coords, width=2, fill='red')
+	lineID = self.canvas.create_line(*coords, width=2, fill='red')
+      self.canvas.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
 
     #finially, draw all the ViewTimes; this mean's they're drawn over everything
     for time in self.interface.times:
@@ -727,7 +741,7 @@ class Interface:
     self.noteBook.add(self.experimentTab, text='Experiment', state='disabled') #experiment tab starts out disabled; it's enabled after we connect to a server and set up traces
     
 #set some variables used by the GUI
-    self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', 'merge', and 'rename'
+    self.mode = 'select' #mode determines what clikcing on the canvas will do. Options are 'select', 'addTime', 'deleteTime', 'merge', 'newValue', and 'rename'
 
 #The setup tab
     #the manager address entry
@@ -817,10 +831,17 @@ class Interface:
       self.nameEntry.focus_set() #move focus to nameEntry box when clicked
     ttk.Button(self.controlFrame, text='Rename', command=renameMode).grid(column=3, row=0, sticky='w', padx=5, pady=5)
 
-    ttk.Label(self.controlFrame, text="Name:").grid(column=4, row=0, sticky='e', padx=5, pady=5)
+    def newValueMode():
+      self.mode = 'newValue'
+      self.nameEntry.focus_set() #move focus to nameEntry box when clicked
+    ttk.Button(self.controlFrame, text='New Value', command=newValueMode).grid(column=4, row=0, sticky='w', padx=5, pady=5)
+
+      
+    #now, for the name label and entry
+    ttk.Label(self.controlFrame, text="Name:").grid(column=5, row=0, sticky='e', padx=5, pady=5)
     
     self.nameEntry = ttk.Entry(self.controlFrame)
-    self.nameEntry.grid(column=5, row=0,sticky='w', padx=5, pady=5)
+    self.nameEntry.grid(column=6, row=0, sticky='w', padx=5, pady=5)
 
 #The view frame and canvas
     #print [int(i) for i in self.serverListbox.curselection()]
