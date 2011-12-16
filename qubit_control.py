@@ -486,7 +486,7 @@ class ViewDuration:
 	count = 1 #count holds the number we'll append to the end of the name
 	while self.assocViewValue.name + str(count) in [v.name for v in iface.values]:
 	  count += 1
-	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked,iface)
+	newValue = ViewValue(self.assocViewValue.name + str(count), self.assocViewValue.value, self.assocViewValue.locked, iface, function=self.assocViewValue.function, mode=self.assocViewValue.mode)
 	iface.values.append(newValue)
 	self.assocViewValue = newValue
 	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch
