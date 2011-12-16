@@ -169,14 +169,17 @@ class ViewTime:
   
 class ViewValue:
   """The class for a value drawn on the trace"""
-  def __init__(self,name, value, locked, interface, function = lambda t: 1, row=None):
+  def __init__(self, name, value, locked, interface, function=None, mode="constant", row=None):
     self.name = name
-    self.value = value
     self.locked = locked
     self.interface = interface
     self.row = row
     
+    #can either be in constant mode -- which allows GUI dragging -- or in function mode, which allows more complicated values but doesn't allow dragging
+    self.mode = mode
+    self.value = value
     self.function = function
+    
     
     self.stringVar = Tkinter.StringVar()
     self.stringVar.set(str(value))
@@ -185,21 +188,38 @@ class ViewValue:
     self.tkLabel = None
     self.tkEntry = None
     self.tkCheck = None
+    self.tkMenubutton = None
     
   def setFunction(self, string):
     """Sets self.function using the given string. The string should be a function of t (e.g. 'sin(t)'). Note that the value at a given time is the function multipled by self.value"""
     #todo: find way to do this without importing math every time
     exec "from math import *\n" + "self.function = lambda t: " + string in locals()
+
+    #update all the traces which have this value
+    self.updateTraces()
     
   def values(self, times):
     """Returns the value this ViewValue takes at the given times. The value this takes at a given time is self.value*self.function(time)"""
-    return [self.value*self.function(t) for t in times]
+
+    print "test"
+    if self.mode == 'constant':
+      return len(times)*[self.value]
+    else:
+      return [self.function(t*10e-9) for t in times] #the 10e-9 coverts the time to nanoseconds
   
   def maxValue(self):
     """Returns the maximum value this takes over the whole period from start to end"""
-    times = range(self.interface.startTime.value, self.interface.endTime.value)
-    return max(self.values(times))
-  
+    if self.mode == 'constant':
+      return self.value
+    else:
+      times = self.interface.timeArray()
+      return max(self.values(times))
+
+  def updateTraces(self):
+    for trace in [t for t in self.interface.traces if self in t.values()]:
+      trace.redrawCanvas()
+      trace.redrawYaxis()
+      
   def setValue(self, value, errorIfImpossible=False):
     """
     The value of a ViewValue is a voltage. It can only be set if it isn't locked
@@ -211,9 +231,7 @@ class ViewValue:
 	self.value = value
       
 	#update all the traces which have this value
-	for trace in [t for t in self.interface.traces if self in t.values()]:
-	  trace.redrawCanvas()
-	  trace.redrawYaxis()
+	self.updateTraces()
       else:
 	pass #todo: value < 0 so raise error
     elif (self.value != value) and errorIfImpossible: #can't be set to the requested time because it's locked
@@ -254,6 +272,8 @@ class ViewValue:
       self.tkEntry.destroy()
     if self.tkCheck != None:
       self.tkCheck.destroy()
+    if self.tkMenubutton != None:
+      self.tkMenubutton.destroy()
     
     #the label
     self.tkLabel = ttk.Label(self.interface.valueFrame, text=self.name)
@@ -270,7 +290,10 @@ class ViewValue:
     #this method updates the value if it's changed in the entry box
     def entryMethod(eventObj):
       if self.tkEntry.get() != '':
-	self.setValue(float(self.tkEntry.get()))
+	if self.mode == "constant":
+	  self.setValue(float(self.tkEntry.get()))
+	else: #function mode
+	  self.setFunction(str(self.tkEntry.get()))
       return 1
     self.tkEntry.bind("<Return>",entryMethod)
     
@@ -282,7 +305,29 @@ class ViewValue:
     self.tkCheck = ttk.Checkbutton(self.interface.valueFrame, text='Locked?', command=checkMethod, variable=self.intVar)
     self.tkCheck.grid(column=2, row=row,sticky='w', padx=5, pady=5)   
     self.interface.valueFrameParts.append(self.tkCheck)
-
+    
+    #the menubutton slects whether this ViewValue takes a constant or a function
+    def setConstant():
+      self.mode = 'constant'
+      self.updateTraces()
+    
+    def setFunction():
+      self.mode = 'function'
+      if self.function == None:
+	self.setFunction(str(self.tkEntry.get()))
+      else:
+	self.updateTraces()
+      
+    
+    self.tkMenubutton = ttk.Menubutton(self.interface.valueFrame, text="Type")
+    self.tkMenubutton.grid(column=3, row=row,sticky='ew', padx=5, pady=5) 
+    menu = Tkinter.Menu(self.tkMenubutton, tearoff = 0)
+    self.tkMenubutton["menu"] = menu
+    
+    #todo: make the selected option depend on self.mode; at present, neithe are selected by default
+    menu.add_radiobutton(label="Constant", command=setConstant)
+    menu.add_radiobutton(label="Function", command=setFunction)
+    
   def redraw(self):
     """Redraw the widgets in the value frame in the same row as it was before"""
     if self.row != None:
@@ -290,7 +335,8 @@ class ViewValue:
   
   def dragMethod(self, eventObj, trace):
     """Used for changing the value by dragging the line on the canvas. Needs to know the trace it's attached to because they can have different y scales."""
-    self.setValue(trace.yToValue(eventObj.y))
+    if self.mode == "constant":
+      self.setValue(trace.yToValue(eventObj.y))
     
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
@@ -504,13 +550,29 @@ class ViewTrace:
 
     #next, draw all the ViewValues
     for value in self.values():
-      lineID = self.canvas.create_line(0, self.valueToY(value.value), self.viewWidth, self.valueToY(value.value), width=1, fill='red', dash='.')
-      self.canvas.tag_bind(lineID, "<Button-1>",  value.clickMethod)
-
+      if value.mode == 'constant':
+	y = self.valueToY(value.maxValue())
+	lineID = self.canvas.create_line(0, y, self.viewWidth, y, width=1, fill='blue', dash='.')
+	self.canvas.tag_bind(lineID, "<Button-1>",  value.clickMethod)
+      else:
+	times = self.interface.timeArray() #all times from start to end
+	coords = zip(times, value.values(times))
+	for coordpair in zip(coords[:-1],coords[1:]):
+	  first = coordpair[0]
+	  second = coordpair[1]
+	  self.canvas.create_line(self.timeToX(first[0]), self.valueToY(first[1]), self.timeToX(second[0]), self.valueToY(second[1]), width=1, fill='blue', dash='.')
+ 
     #finially, draw all the ViewDurations. Because this comes last, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
     for dur in self.durations:
-      lineID = self.canvas.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
-      self.canvas.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
+      if dur.assocViewValue.mode == 'constant':
+	lineID = self.canvas.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
+	self.canvas.tag_bind(lineID, "<Button-1>",  dur.clickMethod)
+      else:
+	coords = zip(dur.times(), dur.values())
+	for coordpair in zip(coords[:-1],coords[1:]):
+	  first = coordpair[0]
+	  second = coordpair[1]
+	  self.canvas.create_line(self.timeToX(first[0]), self.valueToY(first[1]), self.timeToX(second[0]), self.valueToY(second[1]), width=2, fill='red')
   
   def redrawXaxis(self):
     """Redraws the x-axis lables"""
@@ -585,7 +647,7 @@ class ViewTrace:
      
   def maxValue(self):
     """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
-    rawvalues =  [d.assocViewValue.value for d in self.durations]
+    rawvalues =  [d.maxValue() for d in self.durations]
     rawvalues.sort()
     maxValue = rawvalues[-1]
     if maxValue == 0:
@@ -982,6 +1044,9 @@ class Interface:
       raise NameError("There is no trace named {}.".format(name))
     else:
       return trace
+      
+  def timeArray(self):
+    return range(self.start.time, self.end.time)
       
   def loadExperiment(self):
     pass
