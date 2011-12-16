@@ -200,8 +200,6 @@ class ViewValue:
     
   def values(self, times):
     """Returns the value this ViewValue takes at the given times. The value this takes at a given time is self.value*self.function(time)"""
-
-    print "test"
     if self.mode == 'constant':
       return len(times)*[self.value]
     else:
@@ -511,6 +509,7 @@ class ViewTrace:
     self.startTime = None
     self.endTime = None
     self.maxY = None
+    self.updateMaxY = True #can make false to supress updating maxY; will make drawing faster
 
     #to save typing '.interface' a bazillion times:
     self.timeToX = self.interface.timeToX
@@ -539,15 +538,12 @@ class ViewTrace:
   def redrawCanvas(self):
     """Clears the canvas and redraws everything on it"""
     
+    self.redrawYaxis() #needed?
+    self.updateMaxY = False #to speed up drawing
+    
     #first, clear everything off the canvas (but don't delete the canvas itself)
     self.canvas.delete('all')
     
-    #next, draw all the ViewTimes
-    for time in self.interface.times:
-      if (time.name != 'start') and (time.name != 'end'): #don't display anything for start or stop times; that way they can't be edited through the canvas
-	lineID = self.canvas.create_line(self.timeToX(time.time), 0, self.timeToX(time.time), self.viewHeight, width=2, dash='.') #draw the line
-	self.canvas.tag_bind(lineID, "<Button-1>",  time.clickMethod) #bind the line to it's clickMethod so that it can be interacted with
-
     #next, draw all the ViewValues
     for value in self.values():
       if value.mode == 'constant':
@@ -562,7 +558,7 @@ class ViewTrace:
 	  second = coordpair[1]
 	  self.canvas.create_line(self.timeToX(first[0]), self.valueToY(first[1]), self.timeToX(second[0]), self.valueToY(second[1]), width=1, fill='blue', dash='.')
  
-    #finially, draw all the ViewDurations. Because this comes last, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
+    #next, draw all the ViewDurations. Because this comes after ViewValues, it's drawn over the ViewValues. That means that when you click a duration, you don't get the ViewValue underneath.
     for dur in self.durations:
       if dur.assocViewValue.mode == 'constant':
 	lineID = self.canvas.create_line(self.timeToX(dur.start()), self.valueToY(dur.value()), self.timeToX(dur.end()), self.valueToY(dur.value()), width=2, fill='red')
@@ -573,7 +569,16 @@ class ViewTrace:
 	  first = coordpair[0]
 	  second = coordpair[1]
 	  self.canvas.create_line(self.timeToX(first[0]), self.valueToY(first[1]), self.timeToX(second[0]), self.valueToY(second[1]), width=2, fill='red')
-  
+
+    #finially, draw all the ViewTimes; this mean's they're drawn over everything
+    for time in self.interface.times:
+      if (time.name != 'start') and (time.name != 'end'): #don't display anything for start or stop times; that way they can't be edited through the canvas
+	lineID = self.canvas.create_line(self.timeToX(time.time), 0, self.timeToX(time.time), self.viewHeight, width=2, dash='.') #draw the line
+	self.canvas.tag_bind(lineID, "<Button-1>",  time.clickMethod) #bind the line to it's clickMethod so that it can be interacted with
+
+	  
+    self.updateMaxY = True #reenable now that we're done drawing
+    
   def redrawXaxis(self):
     """Redraws the x-axis lables"""
     
@@ -647,13 +652,16 @@ class ViewTrace:
      
   def maxValue(self):
     """Returns 1.25 times the value of the largest ViewValue so that the trace can be scaled directly on the canvas"""
-    rawvalues =  [d.maxValue() for d in self.durations]
-    rawvalues.sort()
-    maxValue = rawvalues[-1]
-    if maxValue == 0:
-      return 1.0 #returning zero would result in divide by zero errors later
-    else:
-      return 1.25*maxValue #return 1.25 times the largest value
+    if self.updateMaxY: #only run if it's true
+      rawvalues =  [d.maxValue() for d in self.durations]
+      rawvalues.sort()
+      maxValue = rawvalues[-1]
+      if maxValue == 0:
+	return 1.0 #returning zero would result in divide by zero errors later
+      else:
+	return 1.25*maxValue #return 1.25 times the largest value
+    else: #otherwise, just return the old value
+      return self.maxY
   
   def valueToY(self, value):
     """Converts from value to canvas y coordinate"""
