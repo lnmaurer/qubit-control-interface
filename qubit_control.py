@@ -45,31 +45,31 @@ def find(f, seq):
 
 class ViewTime:
   """The class for a time drawn on the trace"""
-  def __init__(self, name, value, locked, interface, row=None):
+  def __init__(self, name, time, locked, interface, row=None):
     self.name = name
-    self.value = int(round(value)) #only allow integer values
+    self.time = int(round(time)) #only allow integer times
     self.locked = locked
     self.interface = interface
     self.row = row
     
     self.stringVar = Tkinter.StringVar()
-    self.stringVar.set(str(self.value))
+    self.stringVar.set(str(self.time))
     self.intVar = Tkinter.IntVar()
     self.intVar.set(1 if self.locked else 0)
     self.tkLabel = None
     self.tkEntry = None
     self.tkCheck = None
   
-  def setValue(self, value, errorIfImpossible=False):
+  def setTime(self, time, errorIfImpossible=False):
     """
-    The value of a ViewTime is a time. It can only be set if it isn't locked.
+    The time of a ViewTime is a time. It can only be set if it isn't locked.
     
-    If errorIfImpossible is set to True, the method will throw an error if it can't be set to the requested value.
+    If errorIfImpossible is set to True, the method will throw an error if it can't be set to the requested time.
     """
-    if (self.value != value) and (not self.locked):
-      sortedTimes =  [t.value for t in self.interface.times]
+    if (self.time != time) and (not self.locked):
+      sortedTimes =  [t.time for t in self.interface.times]
       sortedTimes.sort()
-      index = sortedTimes.index(self.value)
+      index = sortedTimes.index(self.time)
       #find the limits for what this time can be set to. maxTime is the largest time it can be and minTime is the smallest time it can be
       if index == 0: #in this case, self is the smallest time, don't let it move
 	if errorIfImpossible:
@@ -83,19 +83,19 @@ class ViewTime:
 	minTime = sortedTimes[index-1]
 	maxTime = sortedTimes[index+1]
 	
-      if ((maxTime == None) and (value > minTime)) \
-	or ((maxTime != None) and (minTime != None) and (value > minTime) and (value < maxTime)):
-	self.value = int(round(value)) #can only take integer values
+      if ((maxTime == None) and (time > minTime)) \
+	or ((maxTime != None) and (minTime != None) and (time > minTime) and (time < maxTime)):
+	self.time = int(round(time)) #can only take integer times
 	#since times are on every trace, need to update all of them
 	self.interface.redrawAllCanvases()
 	self.interface.redrawAllXaxies()
       elif errorIfImpossible: #can't be set to the requested time
 	pass #todo: throw an error
-    elif (self.value != value) and errorIfImpossible: #can't be set to the requested time because it's locked
+    elif (self.time != time) and errorIfImpossible: #can't be set to the requested time because it's locked
 	pass #todo: throw an error
 	
-    #by keeping this outside the previous if statement, the tkEntry is restored to the old value if an unacceptable value was entered
-    self.stringVar.set(str(self.value))
+    #by keeping this outside the previous if statement, the tkEntry is restored to the old time if an unacceptable time was entered
+    self.stringVar.set(str(self.time))
   
   def setName(self, name):
     """Sets the time's name and redraws the value frame. The name can only be changed if the time isn't locked."""
@@ -130,14 +130,14 @@ class ViewTime:
     
     self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
     
-    #this method updates the value if it's changed in the entry box
+    #this method updates the time if it's changed in the entry box
     def entryMethod(eventObj):
       if self.tkEntry.get() != '':
-	self.setValue(float(self.tkEntry.get()))
+	self.setTime(float(self.tkEntry.get()))
       return 1
     self.tkEntry.bind("<Return>",entryMethod)
     
-    #the checkbox handles locking the value
+    #the checkbox handles locking the time
     def checkMethod():
       self.locked = (self.intVar.get() == 1)
       self.tkEntry.config(state = 'disabled' if self.locked else 'normal')
@@ -152,8 +152,8 @@ class ViewTime:
       self.disp(self.row)
   
   def dragMethod(self, eventObj):
-    """Used for changing the value by dragging the line on the canvas"""
-    self.setValue(self.interface.xToTime(eventObj.x))
+    """Used for changing the time by dragging the line on the canvas"""
+    self.setTime(self.interface.xToTime(eventObj.x))
     
   def clickMethod(self, eventObj):
     """Used when the line on the canvas is clicked"""
@@ -194,6 +194,11 @@ class ViewValue:
   def values(self, times):
     """Returns the value this ViewValue takes at the given times. The value this takes at a given time is self.value*self.function(time)"""
     return [self.value*self.function(t) for t in times]
+  
+  def maxValue(self):
+    """Returns the maximum value this takes over the whole period from start to end"""
+    times = range(self.interface.startTime.value, self.interface.endTime.value)
+    return max(self.values(times))
   
   def setValue(self, value, errorIfImpossible=False):
     """
@@ -320,9 +325,17 @@ class ViewDuration:
     self.intVar = Tkinter.IntVar()
     self.intVar.set(0)
 
+  def times(self):
+    """Returns an array of the times coverd by this duration: from startTime to endTime in 1ns steps"""
+    return range(self.start(), self.end())
+    
   def values(self):
-      """Returns the values this takes at 1ns values from startTime to endTime"""
-      return self.assocViewValue.values(range(self.startViewTime.value, self.endViewTime.value))    
+    """Returns the values this takes at 1ns times from startTime to endTime"""
+    return self.assocViewValue.values(self.times())
+      
+  def maxValue(self):
+    """Returns the maximum value taken during this duration"""
+    return max(self.values())
     
   def setName(self, name):
     """Sets the duration's name and redraws the value frame."""
@@ -394,11 +407,11 @@ class ViewDuration:
   
   def start(self):
     """Returns the time of the start time"""
-    return self.startViewTime.value
+    return self.startViewTime.time
   
   def end(self):
     """Returns the time of the end time"""
-    return self.endViewTime.value
+    return self.endViewTime.time
   
   def value(self):
     """Returns the value of the associated value"""
@@ -449,8 +462,8 @@ class ViewTrace:
     self.xAxisLables = [] #will store all the widgets for the x-axis
     self.yAxisLables = [] #will store all the widgets for the y-axis
     #the next three are used to store the current axis start/stop so that we can tell if they've changed
-    self.startValue = None
-    self.endValue = None
+    self.startTime = None
+    self.endTime = None
     self.maxY = None
 
     #to save typing '.interface' a bazillion times:
@@ -486,7 +499,7 @@ class ViewTrace:
     #next, draw all the ViewTimes
     for time in self.interface.times:
       if (time.name != 'start') and (time.name != 'end'): #don't display anything for start or stop times; that way they can't be edited through the canvas
-	lineID = self.canvas.create_line(self.timeToX(time.value), 0, self.timeToX(time.value), self.viewHeight, width=2, dash='.') #draw the line
+	lineID = self.canvas.create_line(self.timeToX(time.time), 0, self.timeToX(time.time), self.viewHeight, width=2, dash='.') #draw the line
 	self.canvas.tag_bind(lineID, "<Button-1>",  time.clickMethod) #bind the line to it's clickMethod so that it can be interacted with
 
     #next, draw all the ViewValues
@@ -503,14 +516,14 @@ class ViewTrace:
     """Redraws the x-axis lables"""
     
     #only redraw if something has changed
-    if (self.startValue != self.start.value) or (self.endValue != self.end.value):
+    if (self.startTime != self.start.time) or (self.endTime != self.end.time):
       for l in self.xAxisLables:
 	l.destroy()
       
       self.xAxisLables = []
     
-      self.startValue = self.start.value
-      tmp = ttk.Label(self.viewFrame, text=str(self.startValue))
+      self.startTime = self.start.time
+      tmp = ttk.Label(self.viewFrame, text=str(self.startTime))
       tmp.grid(column=1, row=3, sticky='w', padx=0, pady=5)
       self.xAxisLables.append(tmp)
     
@@ -518,8 +531,8 @@ class ViewTrace:
       tmp.grid(column=2, row=3, sticky='ew', padx=0, pady=5)
       self.xAxisLables.append(tmp)
     
-      self.endValue = self.end.value
-      tmp = ttk.Label(self.viewFrame, text=str(self.endValue))
+      self.endTime = self.end.time
+      tmp = ttk.Label(self.viewFrame, text=str(self.endTime))
       tmp.grid(column=3, row=3, sticky='e', padx=0, pady=5)
       self.xAxisLables.append(tmp)
   
@@ -557,14 +570,14 @@ class ViewTrace:
 
   def addTime(self, newTime):
     """Adds a new time to the canvas and adjust the durations to fit."""
-    toSplit = find(lambda d: (d.start() < newTime.value) and (d.end() > newTime.value), self.durations)
+    toSplit = find(lambda d: (d.start() < newTime.time) and (d.end() > newTime.time), self.durations)
     self.durations.remove(toSplit) #remove the duration that's getting chopped by this
     self.durations.extend(toSplit.split(newTime)) #add the two new durations
     self.redrawCanvas() #we've added a new time, so have to redraw canvas
      
   def deleteTime(self, viewTime):
     #plan: find the two durations that border this time, and delete one. Set the end time of the remaining one to the end time of the deleted one
-    #todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE VALUE FROM???
+    #todo: GIVE OPTION FOR WHICH OF THE TWO DURATIONS TO CHOOSE THE TIME FROM???
     firstDuration = self.durationEndingAt(viewTime)
     secondDuration = self.durationStartingAt(viewTime)
     firstDuration.endViewTime = secondDuration.endViewTime #change first duration so that it covers bother durations
@@ -877,7 +890,7 @@ class Interface:
   #all traces have the same x axis, so we can keep these functions in the interface
   def maxTime(self):
     """Returns the time of the largest ViewTime"""
-    return self.end.value
+    return self.end.time
   
   def timeToX(self, time):
     """Coverts from time to canvas x coordinate"""
@@ -893,7 +906,7 @@ class Interface:
       
   def setTime(self, nameString, newTime):
     """Sets the time with name nameString to newTime"""
-    self.timeNamed(nameString).setValue(newTime, True)
+    self.timeNamed(nameString).setTime(newTime, True)
       
   def addTime(self, name=None, time=None, eventObject=None):
     """Adds a time, either given by a name and time, or by a click on the canvas and the name in the entry box. Then it updates the traces."""
@@ -903,9 +916,9 @@ class Interface:
       self.mode = 'select' #go back to select mode
     
     #todo: throw error if before start of after end
-    if time <= self.start.value:
+    if time <= self.start.time:
       pass
-    if time >= self.end.value:
+    if time >= self.end.time:
       pass
     
     if name not in [t.name for t in self.times]: #there aren't any other times with this name
