@@ -626,15 +626,15 @@ class Interface:
     self.filemenu.add_command(label="Save Experiment", state='disabled', command=self.saveExperiment)
     self.filemenu.add_command(label="Load Experiment", state='disabled', command=self.loadExperiment)
     self.filemenu.add_separator()
-    self.filemenu.add_command(label="Exit", accelerator="Ctrl+Q", command=self.root.quit) #todo: make key binding work
+    self.filemenu.add_command(label="Exit", accelerator="Ctrl+Q", command=self.root.quit)
     self.root.bind_all('<Control-q>', lambda arg: self.root.quit()) #control-q now quits
     menubar.add_cascade(label="File", menu=self.filemenu)
     
     #the edit menu
     editmenu = Tkinter.Menu(menubar, tearoff=0)
-    editmenu.add_command(label="Cut", accelerator="Ctrl+X", command=lambda: self.noteBook.event_generate('<Control-x>')) #todo: make it work
-    editmenu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self.noteBook.event_generate('<Control-c>')) #todo: make it work
-    editmenu.add_command(label="Paste", accelerator="Ctrl+V", command=lambda: self.noteBook.event_generate('<Control-v>')) #todo: make it work
+    editmenu.add_command(label="Cut", accelerator="Ctrl+X", command=lambda: self.noteBook.event_generate('<Control-x>'))
+    editmenu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self.noteBook.event_generate('<Control-c>'))
+    editmenu.add_command(label="Paste", accelerator="Ctrl+V", command=lambda: self.noteBook.event_generate('<Control-v>'))
     menubar.add_cascade(label="Edit", menu=editmenu)
     
     self.root.config(menu=menubar)
@@ -1017,6 +1017,7 @@ if __name__ == "__main__":
     trace.durationStartingAt(time).setName(newDurationName)
     
   def setValueFunction(nameString, functionString):
+    """Sets the function for the ViewValue named nameString to the function given by functionString."""
     gui.valueNamed(nameString).setFunction(functionString)
     
   gui.root.mainloop() #set everything in motion
