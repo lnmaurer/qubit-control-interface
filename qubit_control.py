@@ -183,6 +183,7 @@ class ViewValue:
     
     
     self.stringVar = Tkinter.StringVar()
+    #text we display depends on what mode we're in
     if self.mode == 'constant':
       self.stringVar.set(str(value))
     else:
@@ -222,6 +223,7 @@ class ViewValue:
       return max(self.values(times))
 
   def updateTraces(self):
+    """Updates all traces this value appears on"""
     for trace in [t for t in self.interface.traces if self in t.values()]:
       trace.redrawCanvas()
       trace.redrawYaxis()
@@ -478,11 +480,12 @@ class ViewDuration:
     if iface.mode == 'rename':
       self.setName(iface.nameEntry.get())
       iface.mode = 'select'
-    elif iface.mode == 'newValue':
+    elif iface.mode == 'newValue': #in new value mode, we create a new value for the selected duration using the name in the entry box and copying all other paramters from the current value
       if iface.nameEntry.get() not in [v.name for v in iface.values]:
 	newValue = ViewValue(iface.nameEntry.get(), self.assocViewValue.value, self.assocViewValue.locked, iface, functionText=self.assocViewValue.functionText, mode=self.assocViewValue.mode)
-	iface.values.append(newValue)
 	self.assocViewValue = newValue
+	iface.values.append(newValue)
+	iface.removeUnusedValues() #in case we replaced the last place this value was in use
 	iface.redrawValueFrame() #added a new thing to value frame, so need to redraw it from scratch    
 	iface.mode = 'select'
     elif iface.mode == 'merge':
@@ -1069,13 +1072,14 @@ class Interface:
       return trace
       
   def timeArray(self):
+    """Retruns array of all times, in 1ns steps, from start to end."""
     return range(self.start.time, self.end.time)
       
   def loadExperiment(self):
-    pass
+    pass #todo
   
   def saveExperiment(self):
-    pass
+    pass #todo
       
       
 if __name__ == "__main__":
