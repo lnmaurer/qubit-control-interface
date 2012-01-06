@@ -197,19 +197,24 @@ class ViewValue:
     self.tkMenubutton = None
     
   def makeLambda(self, force = False):
-    """make a function using the text in self.functionText. If force is True, remakes lambda even if variables are unchanged, which you want to do sometimes (e.g. '1.0' and 'sin(t)' have the same dictionary)"""   
+    """make a function using the text in self.functionText. If force is True, remakes lambda even if variables are unchanged, which you want to do sometimes (e.g. '1.0' and '5.0' have the same dictionary)"""   
     variables = {'self': self} #dictionary to hold variables
+    #look though the variables in interface to see if any of them are used
+    #these include any variables made when running the code in the code frame
+    #and all the functions/variables from the math libary (e.g. 'sin', 'pi', etc.)
+    for globalVariableName in self.interface.variables.keys():
+      if globalVariableName in self.functionText: #only add it to the dictionary if it's needed -- note that this isn't foolproof, the text may be in the string even if the function/variable isn't used (e.g. if you use 'ceil()', 'e' will also be added to the dictionary)
+	variables[globalVariableName] = self.interface.variables[globalVariableName]
     for time in self.interface.times:
-      if time.name in self.functionText: #only add it to the dictionary if it's needed
+      if time.name in self.functionText: #only add it to the dictionary if it's needed -- same caveat as above
 	variables[time.name] = time.time * 1e-9 #add all the times to variables, and make them in nS
     for value in self.interface.values:
-      if value.name in self.functionText: #only add it to the dictionary if it's needed
+      if value.name in self.functionText: #only add it to the dictionary if it's needed -- same caveat as above
 	variables[value.name] = value.value #add all the values to variables
-    if force or (variables != self.variables): #only exectute if variables have changed since last time
+    if force or (variables != self.variables): #only exectute if variables have changed since last time or if it's forced
       self.variables = variables.copy()
-      #todo: find way to do this without importing math every time, because it's slow
-      #that's the reason we go through several checks to not update this if nothing has changed
-      exec "from math import *\n" + "self.lda = lambda t: " + self.functionText in variables
+      #don't have to omport math because all those functions will end up in variables
+      exec "self.lda = lambda t: " + self.functionText in variables
     
   def function(self, t):
     """returns the value of self.lda for the given t (in seoncds)"""
@@ -920,6 +925,8 @@ class Interface:
     self.redrawValueFrame()
   
 #The code frame
+    self.variables = globals().copy() #hold the variables for executing code later on
+    
     self.codeFrame = ttk.Labelframe(self.experimentTab,text='Code')
     self.codeFrame.grid(column=0, row=2, sticky='nsew', padx=5, pady=5)
     
@@ -936,14 +943,14 @@ class Interface:
     
     def runCode():
       #'variables' is the dictionary that will hold the variables for executing the code
-      variables = globals().copy() #start by just copying the global variables
+      self.variables = globals().copy() #start by just copying the global variables
       for time in self.times:
-	variables[time.name] = time #add all the times to variables
+	self.variables[time.name] = time #add all the times to variables
       for value in self.values:
-	variables[value.name] = value #add all the values to variables
+	self.variables[value.name] = value #add all the values to variables
       #exectue the code now that we've made the dictionary
       try:
-	exec self.codeText.get('1.0', 'end') in variables
+	exec self.codeText.get('1.0', 'end') in self.variables
       except:
 	#todo: better message
 	tkMessageBox.showerror("Error", "{!s}\n{!s}\n{!s}".format(*sys.exc_info()))
