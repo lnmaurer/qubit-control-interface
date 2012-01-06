@@ -179,7 +179,8 @@ class ViewValue:
     self.mode = mode
     self.value = value
     self.functionText = functionText
-    exec "from math import *\n" + "self.function = lambda t: " + functionText in locals()
+    if self.mode != 'constant':
+      self.makeLambda() #don't run initially because you can run in to trouble when the interface is still being initialized
     
     
     self.stringVar = Tkinter.StringVar()
@@ -195,12 +196,26 @@ class ViewValue:
     self.tkCheck = None
     self.tkMenubutton = None
     
+  def makeLambda(self):
+    """make a function using the text in self.functionText"""
+    variables = locals().copy() #start by just copying the local variables
+    for time in self.interface.times:
+      variables[time.name] = time.time * 1e-9 #add all the times to variables, and make them in nS
+    for value in self.interface.values:
+      variables[value.name] = value.value #add all the values to variables
+    #todo: find way to do this without importing math every time
+    exec "from math import *\n" + "self.lda = lambda t: " + self.functionText in variables
+    
+  def function(self, t):
+    """returns the value of self.lda for the given t (in seoncds)"""
+    self.makeLambda() #todo: is it nescessary to make it every time? Is there a cleaner way to update the variables used by the lambda?
+    return self.lda(t)
+    
   def setFunction(self, string):
     """Sets self.function using the given string. The string should be a function of t (e.g. 'sin(t)'). Note that the value at a given time is the function multipled by self.value"""
     if not self.locked:
       self.functionText = string
-      #todo: find way to do this without importing math every time
-      exec "from math import *\n" + "self.function = lambda t: " + string in locals()
+      self.makeLambda()
 
       #update all the traces which have this value
       self.updateTraces()
@@ -212,7 +227,7 @@ class ViewValue:
     if self.mode == 'constant':
       return len(times)*[self.value]
     else:
-      return [self.function(t*10e-9) for t in times] #the 10e-9 coverts the time to nanoseconds
+      return [self.function(t*1e-9) for t in times] #the 1e-9 coverts the time to nanoseconds
   
   def maxValue(self):
     """Returns the maximum value this takes over the whole period from start to end"""
@@ -323,6 +338,7 @@ class ViewValue:
     def setFunction():
       self.mode = 'function'
       self.stringVar.set(str(self.functionText))
+      self.makeLambda()
       self.updateTraces()
       
     
@@ -881,8 +897,15 @@ class Interface:
     ttk.Button(self.codeFrame, text='Test Code').grid(column=0, row=2, padx=5, pady=5)
     
     def runCode():
+      #'variables' is the dictionary that will hold the variables for executing the code
+      variables = globals().copy() #start by just copying the global variables
+      for time in self.times:
+	variables[time.name] = time #add all the times to variables
+      for value in self.values:
+	variables[value.name] = value #add all the values to variables
+      #exectue the code now that we've made the dictionary
       try:
-	exec self.codeText.get('1.0', 'end') in globals()
+	exec self.codeText.get('1.0', 'end') in variables
       except:
 	#todo: better message
 	tkMessageBox.showerror("Error", "{!s}\n{!s}\n{!s}".format(*sys.exc_info()))
