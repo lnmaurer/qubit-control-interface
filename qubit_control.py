@@ -237,6 +237,14 @@ class ViewValue:
       times = self.interface.timeArray()
       return max(self.values(times))
 
+  def minValue(self):
+    """Returns the minimum value this takes over the whole period from start to end"""
+    if self.mode == 'constant':
+      return self.value
+    else:
+      times = self.interface.timeArray()
+      return min(self.values(times))
+      
   def updateTraces(self):
     """Updates all traces this value appears on"""
     for trace in [t for t in self.interface.traces if self in t.values()]:
@@ -405,6 +413,10 @@ class ViewDuration:
   def maxValue(self):
     """Returns the maximum value taken during this duration"""
     return max(self.values())
+
+  def minValue(self):
+    """Returns the minimum value taken during this duration"""
+    return min(self.values())
     
   def setName(self, name):
     """Sets the duration's name and redraws the value frame."""
@@ -542,7 +554,9 @@ class ViewTrace:
     self.startTime = None
     self.endTime = None
     self.maxY = None
+    self.minY = None
     self.updateMaxY = True #can make false to supress updating maxY; will make drawing faster
+    self.updateMinY = True
 
     #to save typing '.interface' a bazillion times:
     self.timeToX = self.interface.timeToX
@@ -573,9 +587,16 @@ class ViewTrace:
     
     self.redrawYaxis() #needed?
     self.updateMaxY = False #to speed up drawing
+    self.updateMinY = False #to speed up drawing
     
     #first, clear everything off the canvas (but don't delete the canvas itself)
     self.canvas.delete('all')
+    
+    #next, draw a line for y=0 if it's in range
+    yorig = self.valueToY(0)
+    if (yorig >= 0) and (yorig <= self.interface.viewHeight):
+      coords = [(self.timeToX(self.interface.start.time), yorig), (self.timeToX(self.interface.end.time), yorig)]
+      self.canvas.create_line(*coords, width=1, fill='black', dash='-')
     
     #next, draw all the ViewValues
     for value in self.values():
@@ -605,6 +626,7 @@ class ViewTrace:
 
 	  
     self.updateMaxY = True #reenable now that we're done drawing
+    self.updateMinY = True
     
   def redrawXaxis(self):
     """Redraws the x-axis lables"""
@@ -634,7 +656,7 @@ class ViewTrace:
     """Redraws the y-axis lables"""
     
     #only redraw if the max value has changed; the bottom of the plot is always at zero
-    if self.maxY != self.maxValue():
+    if (self.maxY != self.maxValue()) or (self.minY != self.minValue()):
       for l in self.yAxisLables:
 	l.destroy()
 	
@@ -649,7 +671,8 @@ class ViewTrace:
       tmp.grid(column=0, row=1,sticky='nse', padx=0, pady=5)
       self.yAxisLables.append(tmp)
     
-      tmp = ttk.Label(self.viewFrame, text = '0')
+      self.minY = self.minValue()
+      tmp = ttk.Label(self.viewFrame, text = str(self.minY))
       tmp.grid(column=0, row=2,sticky='se', padx=0, pady=5)
       self.yAxisLables.append(tmp)
   
@@ -689,14 +712,27 @@ class ViewTrace:
 	return 1.25*maxValue #return 1.25 times the largest value
     else: #otherwise, just return the old value
       return self.maxY
-  
+
+  def minValue(self):
+    """Returns 1.25 times the value of the smallest ViewValue or zero (whichever is smaller) so that the trace can be scaled directly on the canvas"""
+    if self.updateMinY: #only run if it's true
+      rawvalues =  [d.minValue() for d in self.durations]
+      rawvalues.sort()
+      minValue = rawvalues[0]
+      if minValue >= 0.0:
+	return 0.0
+      else:
+	return 1.25*minValue
+    else: #otherwise, just return the old value
+      return self.minY
+      
   def valueToY(self, value):
     """Converts from value to canvas y coordinate"""
-    return -float(self.interface.viewHeight)/self.maxValue() * value + self.interface.viewHeight
+    return float(self.interface.viewHeight)/(self.minValue()-self.maxValue()) * (value - self.maxValue())
     
   def yToValue(self, y):
     """Converts from canvas y coordinate to value"""
-    return -self.maxValue()/self.interface.viewHeight * y + self.maxValue() 
+    return (self.minValue()-self.maxValue())/self.interface.viewHeight * y + self.maxValue() 
     
   def sortedDurations(self):
     """Returns the durations, sorted from first to last"""
