@@ -179,9 +179,9 @@ class ViewValue:
     self.mode = mode
     self.value = value
     self.functionText = functionText
+    self.variables = {} #will hold the variables for the lambda
     if self.mode != 'constant':
       self.makeLambda() #don't run initially because you can run in to trouble when the interface is still being initialized
-    
     
     self.stringVar = Tkinter.StringVar()
     #text we display depends on what mode we're in
@@ -196,26 +196,31 @@ class ViewValue:
     self.tkCheck = None
     self.tkMenubutton = None
     
-  def makeLambda(self):
-    """make a function using the text in self.functionText"""
-    variables = locals().copy() #start by just copying the local variables
+  def makeLambda(self, force = False):
+    """make a function using the text in self.functionText. If force is True, remakes lambda even if variables are unchanged, which you want to do sometimes (e.g. '1.0' and 'sin(t)' have the same dictionary)"""   
+    variables = {'self': self} #dictionary to hold variables
     for time in self.interface.times:
-      variables[time.name] = time.time * 1e-9 #add all the times to variables, and make them in nS
+      if time.name in self.functionText: #only add it to the dictionary if it's needed
+	variables[time.name] = time.time * 1e-9 #add all the times to variables, and make them in nS
     for value in self.interface.values:
-      variables[value.name] = value.value #add all the values to variables
-    #todo: find way to do this without importing math every time
-    exec "from math import *\n" + "self.lda = lambda t: " + self.functionText in variables
+      if value.name in self.functionText: #only add it to the dictionary if it's needed
+	variables[value.name] = value.value #add all the values to variables
+    if force or (variables != self.variables): #only exectute if variables have changed since last time
+      self.variables = variables.copy()
+      #todo: find way to do this without importing math every time, because it's slow
+      #that's the reason we go through several checks to not update this if nothing has changed
+      exec "from math import *\n" + "self.lda = lambda t: " + self.functionText in variables
     
   def function(self, t):
     """returns the value of self.lda for the given t (in seoncds)"""
-    self.makeLambda() #todo: is it nescessary to make it every time? Is there a cleaner way to update the variables used by the lambda?
+    self.makeLambda() #need to call in case something has changed. todo: find way to avoid this
     return self.lda(t)
     
   def setFunction(self, string):
     """Sets self.function using the given string. The string should be a function of t (e.g. 'sin(t)'). Note that the value at a given time is the function multipled by self.value"""
     if not self.locked:
       self.functionText = string
-      self.makeLambda()
+      self.makeLambda(force = True)
 
       #update all the traces which have this value
       self.updateTraces()
@@ -258,13 +263,10 @@ class ViewValue:
     If errorIfImpossible is set to True, the method will throw an error if it can't be set to the requested value.
     """
     if (self.value != value) and (not self.locked):
-      if value >= 0: #don't allow negative values
-	self.value = value
+      self.value = value
       
-	#update all the traces which have this value
-	self.updateTraces()
-      else:
-	pass #todo: value < 0 so raise error
+      #update all the traces which have this value
+      self.updateTraces()
     elif (self.value != value) and errorIfImpossible: #can't be set to the requested time because it's locked
 	pass #todo: throw an error
 	
@@ -346,7 +348,7 @@ class ViewValue:
     def setFunction():
       self.mode = 'function'
       self.stringVar.set(str(self.functionText))
-      self.makeLambda()
+      self.makeLambda(force = True)
       self.updateTraces()
       
     
