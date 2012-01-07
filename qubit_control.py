@@ -1,9 +1,10 @@
-import Tkinter
+import Tkinter, tkFileDialog
 import ttk
 import tkMessageBox
 import labrad
 from twisted.internet.error import ConnectionRefusedError
 import sys
+import yaml
 from math import * #so we can use sin, cos, etc
 
 """
@@ -59,6 +60,10 @@ class ViewTime:
     self.tkLabel = None
     self.tkEntry = None
     self.tkCheck = None
+  
+  def toDict(self):
+    """Retrurns a dict that describes this ViewTime. For use in saving the experiment."""
+    return {'name': self.name, 'time': self.time, 'locked': self.locked}
   
   def setTime(self, time, errorIfImpossible=False):
     """
@@ -195,6 +200,10 @@ class ViewValue:
     self.tkEntry = None
     self.tkCheck = None
     self.tkMenubutton = None
+
+  def toDict(self):
+    """Retrurns a dict that describes this ViewValue. For use in saving the experiment."""
+    return {'name': self.name, 'value': self.value, 'locked': self.locked, 'functionText': self.functionText, 'mode': self.mode}    
     
   def makeLambda(self, force = False):
     """make a function using the text in self.functionText. If force is True, remakes lambda even if variables are unchanged, which you want to do sometimes (e.g. '1.0' and '5.0' have the same dictionary)"""   
@@ -409,6 +418,10 @@ class ViewDuration:
     self.intVar = Tkinter.IntVar()
     self.intVar.set(0)
 
+  def toDict(self):
+    """Retrurns a dict that describes this ViewDuration. For use in saving the experiment."""
+    return {'name': self.name, 'start': self.startViewTime.name, 'end': self.endViewTime.name, 'value': self.assocViewValue.name, 'trace': self.trace.name, 'locked': self.locked}
+    
   def times(self):
     """Returns an array of the times coverd by this duration: from startTime to endTime in 1ns steps"""
     return range(self.start(), self.end())
@@ -589,6 +602,10 @@ class ViewTrace:
     self.redrawXaxis()
     self.redrawYaxis() 
 
+  def toDict(self):
+    """Retrurns a dict that describes this ViewTrace. For use in saving the experiment."""
+    return {'name': self.name, 'durations': [d.toDict() for d in self.durations]}
+    
   def redrawCanvas(self):
     """Clears the canvas and redraws everything on it"""
     
@@ -776,11 +793,14 @@ class Interface:
     
     #the file menu
     self.filemenu = Tkinter.Menu(menubar, tearoff=0)
-    self.filemenu.add_command(label="Save Experiment", state='disabled', command=self.saveExperiment)
-    self.filemenu.add_command(label="Load Experiment", state='disabled', command=self.loadExperiment)
+    self.filemenu.add_command(label="Save Experiment As", accelerator="Ctrl+S", state='disabled', command=self.saveExperiment)
+    self.filemenu.add_command(label="Load Experiment", accelerator="Ctrl+O", state='disabled', command=self.loadExperiment)
     self.filemenu.add_separator()
     self.filemenu.add_command(label="Exit", accelerator="Ctrl+Q", command=self.root.quit)
-    self.root.bind_all('<Control-q>', lambda arg: self.root.quit()) #control-q now quits
+    #bind keys to the actions
+    self.root.bind_all('<Control-s>', lambda arg: self.saveExperiment()) #todo: disable before the experiment tab is populated
+    self.root.bind_all('<Control-o>', lambda arg: self.loadExperiment()) #todo: disable before the experiment tab is populated
+    self.root.bind_all('<Control-q>', lambda arg: self.root.quit())
     menubar.add_cascade(label="File", menu=self.filemenu)
     
     #the edit menu
@@ -860,7 +880,7 @@ class Interface:
     """Populates the experiment tab with widgets; call after deciding what servers we want traces for"""
 
 #enable experiment loading and saving
-    self.filemenu.entryconfigure('Save Experiment', state="normal")    
+    self.filemenu.entryconfigure('Save Experiment As', state="normal")    
     self.filemenu.entryconfigure('Load Experiment', state="normal")    
     
 #initial conditions for the traces
@@ -1143,13 +1163,79 @@ class Interface:
     """Retruns array of all times, in 1ns steps, from start to end."""
     return range(self.start.time, self.end.time)
       
-  def loadExperiment(self):
-    pass #todo
-  
+  def toDict(self):
+    """Retrurns a dict that describes this Interface. For use in saving the experiment."""
+    d = {}
+    d['code'] = self.codeText.get('1.0', 'end')
+    d['times'] = [t.toDict() for t in self.times]
+    d['values'] = [v.toDict() for v in self.values]
+    d['traces'] = [t.toDict() for t in self.traces]
+    d['variables'] = {}
+    #save all numeric variables that are in self.variables but not in globals(); those are the variables the user made
+    for varName in self.variables:
+      if (varName not in globals()) and isinstance(self.variables[varName], (int, long, float, complex)):
+	d['variables'][varName] = self.variables[varName]
+    return d
+    
   def saveExperiment(self):
-    pass #todo
+    """Saves the experiment to a file using a dialog box and YAML."""
+    fileName = tkFileDialog.asksaveasfilename(filetypes=[('Qubit Experiment File','*.qbexp')], title="Save experiment as...")
+    if fileName != '': #'' is returned if the user hits cancel
+      f = open(fileName, 'w')
+      f.write(yaml.dump(self.toDict()))
+      f.close()
+    
+    
+  def loadExperiment(self):
+    """Loads the experiment from a file using a dialog box and YAML"""
+    fileName = tkFileDialog.askopenfilename(filetypes=[('Qubit Experiment File','*.qbexp')], title="Open experiment...")
+    
+    if fileName != '': #'' is returned if the user hits cancel
+      #load the information from the file
+      f = open(fileName, 'r')
+      loaded = yaml.load(f)
+      f.close()
+  
+      #first, make the times
+      self.times = []
+      for time in loaded['times']:
+	t = ViewTime(time['name'], time['time'], time['locked'], self)
+	self.times.append(t)
+	#if it's start or end, take special care of it
+	if t.name == 'start':
+	  self.start = t
+	elif t.name == 'end':
+	  self.end = t
+	
+      #next, handle the values
+      self.values = []
+      for value in loaded['values']:
+	v = ViewValue(value['name'], value['value'], value['locked'], self, mode = value['mode'], functionText = value['functionText'])
+	self.values.append(v)
+  
+      #finially take care of the traces and their durations
+      #todo: only have this work if the trace names match up with the already existing trace names
+      self.traces = []
+      row = 0
+      initialValue = ViewValue('initial',1,False,self) #temp value for setting up traces
+      for trace in loaded['traces']:
+	t = ViewTrace(trace['name'], self, row, initialValue)
+	self.traces.append(t)
+	row = row + 1
+	
+	t.durations = [] #an initial duration is made when the trace is created; get rid of it
+	for duration in trace['durations']:
+	  dur = ViewDuration(duration['name'], self.timeNamed(duration['start']), self.timeNamed(duration['end']), self.valueNamed(duration['value']), self, t, locked=duration['locked'])
+	  t.durations.append(dur)
+	
+      #add the variables in to our dictionary; apparently this is the cleanest way to do this
+      self.variables = dict(self.variables.items() + loaded['variables'].items())
+
+      #put the code back in the code box
+      self.codeText.insert('end', loaded['code'])
       
-      
+      self.refresh()
+    
 if __name__ == "__main__":
   gui = Interface() #make the interface
 
