@@ -5,6 +5,7 @@ import labrad
 from twisted.internet.error import ConnectionRefusedError
 import sys
 import yaml
+import copy
 from math import * #so we can use sin, cos, etc
 
 """
@@ -222,7 +223,7 @@ class ViewValue:
 	variables[value.name] = value.value #add all the values to variables
     if force or (variables != self.variables): #only exectute if variables have changed since last time or if it's forced
       self.variables = variables.copy()
-      #don't have to omport math because all those functions will end up in variables
+      #don't have to import math because all those functions will end up in variables
       exec "self.lda = lambda t: " + self.functionText in variables
     
   def function(self, t):
@@ -783,6 +784,9 @@ class Interface:
   def __init__(self):
 #The LabRAD connection
     self.labRADconnection = None #don't connect until later
+
+#Will hold the variables for executing code
+    self.variables = globals().copy()    
     
 #The root. This has to come before the other GUI stuff, because 'StringVar's and 'IntVar's in the 'View____'s need it to be initialized before they can be created.
     self.root = Tkinter.Tk()
@@ -925,7 +929,7 @@ class Interface:
     self.nameEntry = ttk.Entry(self.controlFrame)
     self.nameEntry.grid(column=6, row=0, sticky='w', padx=5, pady=5)
 
-#The view frame and canvas
+#The view frame and traces
     #print [int(i) for i in self.serverListbox.curselection()]
     self.viewFrame = ttk.Labelframe(self.experimentTab,text='Traces')
     self.viewFrame.grid(column=0,row=0,sticky='nsew',padx=5,pady=5)
@@ -944,9 +948,7 @@ class Interface:
     self.valueFrameParts = [] #will contain all the widgets in the value frame so that we can destroy them even after the object they belong to gets destroyed
     self.redrawValueFrame()
   
-#The code frame
-    self.variables = globals().copy() #hold the variables for executing code later on
-    
+#The code frame    
     self.codeFrame = ttk.Labelframe(self.experimentTab,text='Code')
     self.codeFrame.grid(column=0, row=2, sticky='nsew', padx=5, pady=5)
     
@@ -974,6 +976,7 @@ class Interface:
       except:
 	#todo: better message
 	tkMessageBox.showerror("Error", "{!s}\n{!s}\n{!s}".format(*sys.exc_info()))
+      self.redrawValueFrame() #so that we display any numeric variables in the code that has been run
       
     ttk.Button(self.codeFrame, text='Run Code', command=runCode).grid(column=1, row=2, padx=5, pady=5)
     ttk.Button(self.codeFrame, text='Load Code').grid(column=2, row=2, padx=5, pady=5)
@@ -1001,25 +1004,48 @@ class Interface:
     #next, we display all the ViewValues. A heading label comes first.      
     tmp = ttk.Label(self.valueFrame, text="Values")
     tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
-    self.valueFrameParts.append(tmp)
-    
+    self.valueFrameParts.append(tmp)  
     row +=1
     
     for el in self.values:
       el.disp(row)
       row += 1
 
-    #finially, we display all the ViewDurations. A heading label comes first.
+    #next, we display all the ViewDurations. A heading label comes first.
     tmp = ttk.Label(self.valueFrame, text="Durations")
     tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
     self.valueFrameParts.append(tmp)    
-    
     row +=1
     
     for el in self.durations():
       el.disp(row)
       row += 1
+      
+    #finially, display the numeric variables from any executed code
+    tmp = ttk.Label(self.valueFrame, text="Numeric Variables")
+    tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
+    self.valueFrameParts.append(tmp)    
+    row +=1
+    
+    for varName in self.variables:
+      #only display if it's not in globals and it's numeric
+      if (varName not in globals()) and isinstance(self.variables[varName], (int, long, float, complex)):
+	tmp = ttk.Label(self.valueFrame, text=varName + ': ' + str(self.variables[varName]))
+	tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
+	self.valueFrameParts.append(tmp)
+	#having the following work is kind of tricky; the local variable in the lambda is critical. See <http://mail.python.org/pipermail/tutor/2005-November/043360.html>
+	tmp = ttk.Button(self.valueFrame, text='Delete', command=lambda vn=varName: self.deleteVar(vn))
+	tmp.grid(column=2, row=row, padx=5, pady=5)
+	self.valueFrameParts.append(tmp)
+	row +=1
+ 
   
+  def deleteVar(self, varName):
+    """Delete the variable named varName from the variable dictionary"""
+    del self.variables[varName] #remove the variable from the dictionary
+    self.redrawValueFrame()
+      
+      
   def refresh(self):
     """Redraw all the parts of the GUI that can change"""
     self.redrawAllCanvases()
