@@ -372,9 +372,12 @@ class ViewValue:
     menu = Tkinter.Menu(self.tkMenubutton, tearoff = 0)
     self.tkMenubutton["menu"] = menu
     
-    #todo: make the selected option depend on self.mode; at present, neithe are selected by default
+    #todo: make the selected option depend on self.mode; at present, neither are selected by default
     menu.add_radiobutton(label="Constant", command=setConstant)
     menu.add_radiobutton(label="Function", command=setFunction)
+    
+    self.interface.valueFrameParts.append(self.tkMenubutton)
+
     
   def redraw(self):
     """Redraw the widgets in the value frame in the same row as it was before"""
@@ -1033,7 +1036,7 @@ class Interface:
 	tmp = ttk.Label(self.valueFrame, text=varName + ': ' + str(self.variables[varName]))
 	tmp.grid(column=0, row=row, columnspan=2, padx=5, pady=5)
 	self.valueFrameParts.append(tmp)
-	#having the following work is kind of tricky; the local variable in the lambda is critical. See <http://mail.python.org/pipermail/tutor/2005-November/043360.html>
+	#having the following work is kind of tricky; the default parameter in the lambda is critical. See <http://mail.python.org/pipermail/tutor/2005-November/043360.html>
 	tmp = ttk.Button(self.valueFrame, text='Delete', command=lambda vn=varName: self.deleteVar(vn))
 	tmp.grid(column=2, row=row, padx=5, pady=5)
 	self.valueFrameParts.append(tmp)
@@ -1043,8 +1046,7 @@ class Interface:
   def deleteVar(self, varName):
     """Delete the variable named varName from the variable dictionary"""
     del self.variables[varName] #remove the variable from the dictionary
-    self.redrawValueFrame()
-      
+    self.redrawValueFrame()    
       
   def refresh(self):
     """Redraw all the parts of the GUI that can change"""
@@ -1260,6 +1262,7 @@ class Interface:
       #put the code back in the code box
       self.codeText.insert('end', loaded['code'])
       
+      #now that we've loaded the data, refresh the GUI
       self.refresh()
     
 if __name__ == "__main__":
